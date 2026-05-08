@@ -1,0 +1,10 @@
+* text=auto eol=lf
+
+*.sh text eol=lf
+*.py text eol=lf
+Makefile text eol=lf
+Makefile.* text eol=lf
+*.mk text eol=lf
+*.lds.S text eol=lf
+activate text eol=lf
+pintos text eol=lf
