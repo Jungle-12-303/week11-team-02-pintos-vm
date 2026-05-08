@@ -1,0 +1,59 @@
+# Pintos 빌드 중간 파일 및 산출물
+*.o
+*.d
+*.out
+*.bin
+*.elf
+*.img
+*.map
+*.lst
+*.log
+*.qemu
+*.raw
+*.hex
+*.dis
+*.dump
+
+# 빌드 디렉터리
+**/build/
+**/bin/
+**/obj/
+**/output/
+# core dump
+core
+
+# 임시 파일
+*~
+*.swp
+
+# macOS
+.DS_Store
+
+# IDE 설정 (개인 환경)
+.idea/
+/.vscode/settings.json
+/pintos/.vscode/pintos-test-history.json
+pintos-test-history.json
+
+# CLion 전용 (IDE 코드 분석용)
+CMakeLists.txt
+cmake-build-debug/
+
+# clangd 설정 및 캐시
+.cache/
+.clangd
+**/compile_commands.json
+/.clang-format
+
+# Claude 설정
+.claude/
+
+# 로컬 편의용 Makefile
+/Makefile
+
+# Annotation (auto-generated)
+.jungle-kit/
+.gitattributes
+
+# Annotation (auto-generated)
+.annotation/

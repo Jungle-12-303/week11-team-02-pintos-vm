@@ -1,0 +1,10 @@
+# 인라인 어셈블리가 포함된 파일은 clang-format 검사에서 제외
+pintos/threads/thread.c
+pintos/threads/interrupt.c
+pintos/userprog/gdt.c
+pintos/lib/user/syscall.c
+pintos/tests/vm/pt-grow-bad.c
+pintos/include/threads/synch.h
+pintos/include/threads/io.h
+pintos/include/lib/user/syscall.h
+pintos/include/intrinsic.h

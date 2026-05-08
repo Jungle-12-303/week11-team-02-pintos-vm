@@ -1,0 +1,24 @@
+Integrated project source order
+
+1. Base: last_team_2
+2. Overlay: last_team_3 project code changes
+3. Overlay: selected last_team_1 project code and tooling
+
+Excluded from source merge
+
+- .git metadata
+- build outputs
+- team-study Markdown documents
+- docs directory from source repositories
+
+High-conflict files to review first
+
+- pintos/devices/timer.c
+- pintos/include/devices/timer.h
+- pintos/include/threads/synch.h
+- pintos/include/threads/thread.h
+- pintos/threads/init.c
+- pintos/threads/synch.c
+- pintos/threads/thread.c
+- pintos/userprog/process.c
+- pintos/userprog/syscall.c
