@@ -13,8 +13,8 @@
 ```c
 struct page {
   const struct page_operations *operations;
-  void *va;              /* Address in terms of user space */
-  struct frame *frame;   /* Back reference for frame */
+  void *va;              /* @origin Address in terms of user space */
+  struct frame *frame;   /* @origin Back reference for frame */
 
   union {
     struct uninit_page uninit;
@@ -27,7 +27,52 @@ struct page {
 };
 ```
 
-이 구조체는 page operations(아래에서 설명), 가상 주소, 물리 프레임을 가진다. 추가로 union 필드를 가지고 있다. union은 하나의 메모리 영역에 서로 다른 타입의 데이터를 저장할 수 있게 해 주는 특별한 자료형이다. union 안에는 여러 멤버가 있지만, 한 시점에 실제 값을 담을 수 있는 멤버는 오직 하나뿐이다. 이는 우리 시스템의 한 페이지가 `uninit_page`, `anon_page`, `file_page`, 또는 `page_cache` 중 하나가 될 수 있다는 뜻이다. 예를 들어 어떤 페이지가 anonymous page라면(See Anonymous Page), `page` 구조체는 멤버 중 하나로 `struct anon_page anon` 필드를 갖게 된다. `anon_page`는 anonymous page에 대해 우리가 유지해야 하는 모든 필요한 정보를 담는다.
+주석 번역:
+
+- `@origin Address in terms of user space`
+  사용자 공간 기준의 가상 주소
+- `@origin Back reference for frame`
+  이 페이지가 올라간 프레임을 다시 가리키는 역참조 포인터
+
+이 구조체는 page operations(아래에서 설명), 가상 주소, 물리 프레임을 가진다. 즉 `struct page`는 "가상 페이지 하나의 공통 메타데이터"를 담는 상위 구조체라고 보면 된다.
+
+각 필드를 이해할 때는 다음처럼 읽으면 된다.
+
+- `operations`
+  이 페이지 타입에 맞는 함수 테이블이다. `swap_in`, `swap_out`, `destroy` 같은 동작을 어떤 함수로 처리할지 결정한다.
+- `va`
+  이 페이지가 담당하는 사용자 가상 주소다. 보통 페이지 시작 주소 단위로 관리한다.
+- `frame`
+  현재 이 페이지가 어떤 물리 프레임에 올라가 있는지 가리킨다. 아직 메모리에 올라오지 않았다면 `NULL`일 수 있다.
+
+추가로 `union` 필드를 가지고 있다. union은 하나의 메모리 영역을 여러 타입이 "공유해서" 쓰는 특별한 자료형이다. union 안에는 여러 멤버가 있지만, 한 시점에 실제 의미를 가지는 멤버는 하나뿐이다. 이는 우리 시스템의 한 페이지가 `uninit_page`, `anon_page`, `file_page`, 또는 `page_cache` 중 하나가 될 수 있다는 뜻이다.
+
+예를 들어 어떤 페이지가 anonymous page라면(See Anonymous Page), `page` 구조체는 멤버 중 하나로 `struct anon_page anon` 필드를 갖게 된다. 이때 실제로 의미 있게 사용하는 union 멤버는 `anon`이고, `anon_page`는 anonymous page에 대해 우리가 유지해야 하는 모든 필요한 정보를 담는다.
+
+여기서 union은 "인터페이스처럼" 쓰인다고 이해해도 된다. 정확히 말하면 union 자체가 인터페이스는 아니지만, `struct page`가 공통 인터페이스 역할을 하고, union은 "페이지 타입별 상세 구현 데이터"를 담는 자리로 동작한다.
+
+즉 구조를 나눠 보면 다음과 같다.
+
+- 공통 인터페이스
+  `struct page`
+- 공통 동작 선택
+  `operations`
+- 타입별 상세 상태
+  `union { uninit, anon, file, ... }`
+
+객체지향적으로 비유하면:
+
+- `struct page`는 부모 타입
+- `operations`는 가상 함수 테이블
+- `union` 안의 각 구조체는 자식 타입별 추가 필드
+
+그래서 코드에서는 공통적으로 `struct page *page` 하나만 들고 다니면서도,
+
+- 이 페이지가 아직 초기화 전인지
+- anonymous page인지
+- file-backed page인지
+
+에 따라 서로 다른 데이터와 서로 다른 함수를 사용할 수 있다.
 
 ### Page Operations
 

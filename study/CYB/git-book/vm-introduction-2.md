@@ -1,4 +1,4 @@
-# VM Introduction 번역
+# VM Introduction 2 번역
 
 ## Resource Management Overview
 
