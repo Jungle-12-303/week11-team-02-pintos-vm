@@ -67,18 +67,18 @@ err:
 /* Find VA from spt and return page. On error, return NULL. */
 struct page *
 spt_find_page (struct supplemental_page_table *spt, void *va) {
-	struct page *page = (struct page*)palloc_get_page(PAL_ZERO);
-	if (page == NULL){
+	struct page *page;
+	struct page tmp_page;
+	
+	tmp_page.va = pg_round_down(va);
+
+	struct hash_elem *tmp_elem = hash_find(&(spt->pages), &(tmp_page.hash_elem));
+
+	if (tmp_elem == NULL){
 		return NULL;
 	}
-	page->va = pg_round_down(va);
-	struct hash_elem *tmp = hash_find(&(spt->pages), &(page->hash_elem));
-	palloc_free_page(page);
-	if (tmp == NULL){
-		return NULL;
-	}
-	struct page * result = hash_entry (tmp, struct page, hash_elem);
-	return result;
+	page = hash_entry (tmp_elem, struct page, hash_elem);
+	return page;
 }
 
 /* Insert PAGE into spt with validation. */
