@@ -187,7 +187,7 @@ vm_do_claim_page (struct page *page) {
 /* Initialize new supplemental page table */
 void
 supplemental_page_table_init (struct supplemental_page_table *spt) {
-	hash_init(&spt->hash_table, &spt->hash_table.hash, &spt->hash_table.less, &spt->hash_table.aux);
+	hash_init(&spt->hash_table, hash_bytes, page_less, &spt->hash_table.aux);
 }
 
 /* Copy supplemental page table from src to dst */
