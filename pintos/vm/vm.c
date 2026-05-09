@@ -62,11 +62,24 @@ err:
 
 /* Find VA from spt and return page. On error, return NULL. */
 struct page *
-spt_find_page (struct supplemental_page_table *spt UNUSED, void *va UNUSED) {
+spt_find_page (struct supplemental_page_table *spt, void *va) {
 	struct page *page = NULL;
-	/* TODO: Fill this function. */
+	struct page tmp_page; // 가짜 페이지 하나 생성
 
-	return page;
+	tmp_page.va = va; // 가짜 페이지에 가상주소 넣기
+
+	/* TODO: Fill this function. */
+	// 주어진 spt에서 가상주소와 일치하는 페이지의 해시 elem을 찾음
+	struct hash_elem* found_elem = hash_find(&spt->hash_table, &tmp_page.hash_elem);
+
+	if(found_elem == NULL){ // 가상주소와 일치하는 해시elem을 못 찾음
+		return NULL;
+	}else{
+		// found_elem을 통해서 page가 되고 싶음.
+		page = hash_entry(found_elem, struct page, hash_elem);
+		return page;	
+	}
+
 }
 
 /* Insert PAGE into spt with validation. */
@@ -174,7 +187,7 @@ vm_do_claim_page (struct page *page) {
 /* Initialize new supplemental page table */
 void
 supplemental_page_table_init (struct supplemental_page_table *spt) {
-	hash_init(&spt->page, &spt->page.hash, &spt->page.less, &spt->page.aux);
+	hash_init(&spt->hash_table, &spt->hash_table.hash, &spt->hash_table.less, &spt->hash_table.aux);
 }
 
 /* Copy supplemental page table from src to dst */
