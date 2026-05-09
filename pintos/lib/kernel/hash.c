@@ -392,3 +392,13 @@ remove_elem (struct hash *h, struct hash_elem *e) {
 	list_remove (&e->list_elem);
 }
 
+/*va를 해시테이블의 키값으로 변환하는 함수*/
+uint64_t page_hash(const struct hash_elem *e, void *aux UNUSED){
+	
+	//hash_elem을 통해 page를 구함
+	struct page* page = hash_entry(e, struct page, hash_elem);
+
+	//page의 va로 해시테이블 키값(uint64_t) 반환
+	return hash_bytes (pg_round_down(&page->va), sizeof(page->va));
+}
+

@@ -24,6 +24,7 @@
 #include <stddef.h>
 #include <stdint.h>
 #include "list.h"
+#include "vm.h"
 
 /* Hash element. */
 struct hash_elem {
@@ -97,4 +98,8 @@ uint64_t hash_bytes (const void *, size_t);
 uint64_t hash_string (const char *);
 uint64_t hash_int (int);
 
+uint64_t page_hash(const struct hash_elem *e, void *aux);
+bool hash_less_func (const struct hash_elem *a,
+		const struct hash_elem *b,
+		void *aux);
 #endif /* lib/kernel/hash.h */
