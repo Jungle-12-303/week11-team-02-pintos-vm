@@ -36,6 +36,9 @@ page_get_type (struct page *page) {
 static struct frame *vm_get_victim (void);
 static bool vm_do_claim_page (struct page *page);
 static struct frame *vm_evict_frame (void);
+static uint64_t page_hash (const struct hash_elem *p_, void *aux UNUSED);
+static bool page_less (const struct hash_elem *a_,
+		const struct hash_elem *b_, void *aux UNUSED);
 
 /* Create the pending page object with initializer. If you want to create a
  * page, do not create it directly and make it through this function or
@@ -190,13 +193,13 @@ supplemental_page_table_kill (struct supplemental_page_table *spt UNUSED) {
 	 * TODO: writeback all the modified contents to the storage. */
 }
 
-unsigned
+static uint64_t
 page_hash (const struct hash_elem *p_, void *aux UNUSED) {
 	struct page *page = hash_entry (p_, struct page, hash_elem);
-	return hash_int ((int) page->va);
+	return hash_bytes (&page->va, sizeof (page->va));
 }
 
-bool
+static bool
 page_less (const struct hash_elem *a_, const struct hash_elem *b_, void *aux UNUSED) {
 	struct page *a = hash_entry (a_, struct page, hash_elem);
 	struct page *b = hash_entry (b_, struct page, hash_elem);
