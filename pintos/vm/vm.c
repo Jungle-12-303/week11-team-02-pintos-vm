@@ -66,7 +66,7 @@ spt_find_page (struct supplemental_page_table *spt, void *va) {
 	struct page *page = NULL;
 	struct page tmp_page; // 가짜 페이지 하나 생성
 
-	tmp_page.va = va; // 가짜 페이지에 가상주소 넣기
+	tmp_page.va = pg_round_down(va); // 가짜 페이지에 가상주소 넣기
 
 	// 주어진 spt에서 가상주소와 일치하는 페이지의 해시 elem을 찾음
 	struct hash_elem* found_elem = hash_find(&spt->hash_table, &tmp_page.hash_elem);
@@ -225,7 +225,7 @@ uint64_t page_hash(const struct hash_elem *e, void *aux UNUSED){
 	struct page* page = hash_entry(e, struct page, hash_elem);
 
 	/* 페이지 시작 주소값 자체를 바이트 단위로 해시해서 반환한다. */
-	return hash_bytes (page->va, sizeof(page->va));
+	return hash_bytes (&page->va, sizeof(page->va));
 }
 
 bool hash_less(const struct hash_elem *a, const struct hash_elem *b, void *aux){
