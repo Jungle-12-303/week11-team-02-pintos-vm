@@ -4,6 +4,12 @@
 #include "vm/vm.h"
 #include "vm/inspect.h"
 #include "threads/vaddr.h"
+#include "threads/thread.h"
+#include "threads/palloc.h"
+#include "threads/synch.h"
+
+static struct list frame_table;
+static struct lock frame_table_lock;
 
 /* Initializes the virtual memory subsystem by invoking each subsystem's
  * intialize codes. */
@@ -11,6 +17,10 @@ void
 vm_init (void) {
 	vm_anon_init ();
 	vm_file_init ();
+
+	list_init (&frame_table);
+	lock_init (&frame_table_lock);
+
 #ifdef EFILESYS  /* For project 4 */
 	pagecache_init ();
 #endif
@@ -133,8 +143,28 @@ vm_evict_frame (void) {
  * space.*/
 static struct frame *
 vm_get_frame (void) {
-	struct frame *frame = NULL;
-	/* TODO: Fill this function. */
+	struct frame *frame = malloc (sizeof *frame);
+	if (frame == NULL) {
+		return NULL;
+	}
+
+	frame->kva = palloc_get_page (PAL_USER);
+
+	//palloc failed, evict.
+	if (frame->kva == NULL) {
+		free (frame);
+		frame = vm_evict_frame ();
+		if (frame == NULL) {
+			return NULL;
+		}
+	}
+	else {
+		//palloc success, initialize the frame struct.
+		frame->page = NULL;
+		lock_acquire (&frame_table_lock);
+		list_push_back (&frame_table, &frame->elem);
+		lock_release (&frame_table_lock);
+	}
 
 	ASSERT (frame != NULL);
 	ASSERT (frame->page == NULL);
