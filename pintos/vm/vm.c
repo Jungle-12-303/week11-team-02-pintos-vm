@@ -87,8 +87,10 @@ spt_insert_page (struct supplemental_page_table *spt,
 		struct page *page ) {
 	int succ = false;
 	/* TODO: Fill this function. */
-	assert(spt);
-	assert(page);
+	if(spt == NULL || page == NULL)
+	{
+		return succ;
+	}
 
 	struct hash_elem* hash_elem = hash_insert(&spt->hash_table, &page->hash_elem);
 	
