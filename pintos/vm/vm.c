@@ -68,7 +68,6 @@ spt_find_page (struct supplemental_page_table *spt, void *va) {
 
 	tmp_page.va = va; // 가짜 페이지에 가상주소 넣기
 
-	/* TODO: Fill this function. */
 	// 주어진 spt에서 가상주소와 일치하는 페이지의 해시 elem을 찾음
 	struct hash_elem* found_elem = hash_find(&spt->hash_table, &tmp_page.hash_elem);
 
@@ -88,7 +87,7 @@ spt_insert_page (struct supplemental_page_table *spt UNUSED,
 		struct page *page UNUSED) {
 	int succ = false;
 	/* TODO: Fill this function. */
-
+	
 	return succ;
 }
 
@@ -187,7 +186,7 @@ vm_do_claim_page (struct page *page) {
 /* Initialize new supplemental page table */
 void
 supplemental_page_table_init (struct supplemental_page_table *spt) {
-	hash_init(&spt->hash_table, page_hash, page_less, &spt->hash_table.aux);
+	hash_init(&spt->hash_table, page_hash, hash_less, &spt->hash_table.aux);
 }
 
 /* Copy supplemental page table from src to dst */
@@ -201,4 +200,28 @@ void
 supplemental_page_table_kill (struct supplemental_page_table *spt UNUSED) {
 	/* TODO: Destroy all the supplemental_page_table hold by thread and
 	 * TODO: writeback all the modified contents to the storage. */
+}
+
+
+// SPT를 구현하기 위한 함수이므로 여기에 위치
+
+/*va를 해시테이블의 키값으로 변환하는 함수*/
+/* struct page의 가상 페이지 주소(va)를 해시값으로 바꾼다.
+	이 페이지를 어느 버킷에 넣을지 계산하는 규칙
+*/
+uint64_t page_hash(const struct hash_elem *e, void *aux UNUSED){
+	
+	/* hash_elem이 들어 있는 실제 struct page를 찾는다. */
+	struct page* page = hash_entry(e, struct page, hash_elem);
+
+	/* 페이지 시작 주소값 자체를 바이트 단위로 해시해서 반환한다. */
+	return hash_bytes (page->va, sizeof(page->va));
+}
+
+bool hash_less(const struct hash_elem *a, const struct hash_elem *b, void *aux){
+
+	struct page* page_a = hash_entry(a, struct page, hash_elem);
+	struct page* page_b = hash_entry(b, struct page, hash_elem);
+
+	return page_a->va < page_b->va;
 }

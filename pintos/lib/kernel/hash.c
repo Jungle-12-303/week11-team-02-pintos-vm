@@ -393,12 +393,22 @@ remove_elem (struct hash *h, struct hash_elem *e) {
 }
 
 /*va를 해시테이블의 키값으로 변환하는 함수*/
+/* struct page의 가상 페이지 주소(va)를 해시값으로 바꾼다.
+	이 페이지를 어느 버킷에 넣을지 계산하는 규칙
+*/
 uint64_t page_hash(const struct hash_elem *e, void *aux UNUSED){
 	
-	//hash_elem을 통해 page를 구함
+	/* hash_elem이 들어 있는 실제 struct page를 찾는다. */
 	struct page* page = hash_entry(e, struct page, hash_elem);
 
-	//page의 va로 해시테이블 키값(uint64_t) 반환
-	return hash_bytes (pg_round_down(&page->va), sizeof(page->va));
+	/* 페이지 시작 주소값 자체를 바이트 단위로 해시해서 반환한다. */
+	return hash_bytes (page->va, sizeof(page->va));
 }
 
+bool hash_less(const struct hash_elem *a, const struct hash_elem *b, void *aux){
+
+	struct page* page_a = hash_entry(a, struct page, hash_elem);
+	struct page* page_b = hash_entry(b, struct page, hash_elem);
+
+	return page_a->va > page_b->va;
+}
