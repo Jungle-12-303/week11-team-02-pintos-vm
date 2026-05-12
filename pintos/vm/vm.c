@@ -57,7 +57,7 @@ bool
 vm_alloc_page_with_initializer (enum vm_type type, void *upage, bool writable,
 		vm_initializer *init, void *aux) {
 
-	ASSERT (VM_TYPE(type) != VM_UNINIT)
+	ASSERT (VM_TYPE(type) != VM_UNINIT);
 
 	struct supplemental_page_table *spt = &thread_current ()->spt;
 	
@@ -67,19 +67,37 @@ vm_alloc_page_with_initializer (enum vm_type type, void *upage, bool writable,
 		/* TODO: Create the page, fetch the initialier according to the VM type,
 		 * TODO: and then create "uninit" page struct by calling uninit_new. You
 		 * TODO: should modify the field after calling the uninit_new. */
-		struct page* page = vm_alloc_page(type, upage, writable);
 
+		struct page *page = malloc(sizeof(PGSIZE));
+		
+		if(page == NULL){
+			goto err;
+		}
+		
+		// 함수 자체를 담는 변수
+		// “struct page *, enum vm_type, void *를 인자로 받고 bool을 반환하는 함수”를 가리키는 포인터
 		bool (*initializer) (struct page *, enum vm_type, void *kva);
-		if(type == VM_ANON){
-			initializer = anon_initializer(page, type, page->frame->kva);
-		}else if(type == VM_FILE){
-			initializer = file_backed_initializer(page, type, page->frame->kva);
+
+		if(VM_TYPE(type) == VM_ANON){
+			initializer = anon_initializer;
+		}else if(VM_TYPE(type) == VM_FILE){
+			initializer = file_backed_initializer;
+		}else{
+			free(page);
+			goto err;
 		}
 
-		uninit_new(page, upage, init, type, aux, initializer);
+		uninit_new(page, upage, init, VM_TYPE(type), aux, initializer);
 
 		/* Insert the page into the spt. */
-		spt_insert_page(spt, page);
+		if(!spt_insert_page(spt, page)){
+			free(page);
+			goto err;
+		}
+		return true;
+		
+	}else{
+		goto err;
 	}
 err:
 	return false;
