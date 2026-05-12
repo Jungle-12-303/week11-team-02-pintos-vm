@@ -4,6 +4,14 @@
 #include "vm/vm.h"
 #include "vm/inspect.h"
 #include "threads/vaddr.h"
+#include "threads/thread.h"
+#include "threads/palloc.h"
+#include "threads/synch.h"
+#include "threads/mmu.h"
+#include "threads/init.h"
+
+static struct list frame_table;
+static struct lock frame_table_lock;
 
 /* Initializes the virtual memory subsystem by invoking each subsystem's
  * intialize codes. */
@@ -11,6 +19,10 @@ void
 vm_init (void) {
 	vm_anon_init ();
 	vm_file_init ();
+
+	list_init (&frame_table);
+	lock_init (&frame_table_lock);
+
 #ifdef EFILESYS  /* For project 4 */
 	pagecache_init ();
 #endif
@@ -133,8 +145,28 @@ vm_evict_frame (void) {
  * space.*/
 static struct frame *
 vm_get_frame (void) {
-	struct frame *frame = NULL;
-	/* TODO: Fill this function. */
+	struct frame *frame = malloc (sizeof *frame);
+	if (frame == NULL) {
+		return NULL;
+	}
+
+	frame->kva = palloc_get_page (PAL_USER);
+
+	//palloc failed, evict.
+	if (frame->kva == NULL) {
+		free (frame);
+		frame = vm_evict_frame ();
+		if (frame == NULL) {
+			return NULL;
+		}
+	}
+	else {
+		//palloc success, initialize the frame struct.
+		frame->page = NULL;
+		lock_acquire (&frame_table_lock);
+		list_push_back (&frame_table, &frame->elem);
+		lock_release (&frame_table_lock);
+	}
 
 	ASSERT (frame != NULL);
 	ASSERT (frame->page == NULL);
@@ -172,10 +204,19 @@ vm_dealloc_page (struct page *page) {
 }
 
 /* Claim the page that allocate on VA. */
+// 할당할 페이지를 요청합니다 va. 
+// 먼저 페이지를 가져온 다음, 가져온 페이지를 사용하여 vm_do_claim_page 함수를 호출해야 합니다.
 bool
-vm_claim_page (void *va UNUSED) {
+vm_claim_page (void *va) {
 	struct page *page = NULL;
 	/* TODO: Fill this function */
+	struct thread* cur_thread = thread_current();
+	page = spt_find_page(&cur_thread->spt, va);
+
+	if(page == NULL)
+	{
+		return false;
+	}
 
 	return vm_do_claim_page (page);
 }
@@ -185,13 +226,26 @@ static bool
 vm_do_claim_page (struct page *page) {
 	struct frame *frame = vm_get_frame ();
 
+	if(frame == NULL)
+	{
+		return false;
+	}
 	/* Set links */
 	frame->page = page;
 	page->frame = frame;
 
-	/* TODO: Insert page table entry to map page's VA to frame's PA. */
+	if((!pml4_set_page (thread_current()->pml4, page->va, frame->kva, page->writable)) || (!swap_in(page,frame->kva))){
+		lock_acquire (&frame_table_lock);
+		list_remove(&frame->elem);
+		lock_release (&frame_table_lock);
 
-	return swap_in (page, frame->kva);
+		page->frame = NULL;
+		palloc_free_page(frame->kva);
+		free(frame);
+		return false;
+	}
+
+	return true;
 }
 
 /* Initialize new supplemental page table */
