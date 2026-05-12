@@ -204,10 +204,19 @@ vm_dealloc_page (struct page *page) {
 }
 
 /* Claim the page that allocate on VA. */
+// 할당할 페이지를 요청합니다 va. 
+// 먼저 페이지를 가져온 다음, 가져온 페이지를 사용하여 vm_do_claim_page 함수를 호출해야 합니다.
 bool
 vm_claim_page (void *va) {
 	struct page *page = NULL;
 	/* TODO: Fill this function */
+	struct thread* cur_thread = thread_current();
+	page = spt_find_page(cur_thread->spt, va);
+
+	if(page == NULL)
+	{
+		return false;
+	}
 
 	return vm_do_claim_page (page);
 }
