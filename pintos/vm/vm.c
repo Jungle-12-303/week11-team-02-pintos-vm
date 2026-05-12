@@ -68,26 +68,34 @@ vm_alloc_page_with_initializer (enum vm_type type, void *upage, bool writable,
 		 * TODO: and then create "uninit" page struct by calling uninit_new. You
 		 * TODO: should modify the field after calling the uninit_new. */
 
-		struct page *page = malloc(sizeof(PGSIZE));
+		struct page *page = malloc(sizeof(struct page));
 		
 		if(page == NULL){
 			goto err;
 		}
 		
-		// 함수 자체를 담는 변수
-		// “struct page *, enum vm_type, void *를 인자로 받고 bool을 반환하는 함수”를 가리키는 포인터
+		/* 함수 자체를 담는 변수
+		 	“struct page *, enum vm_type, void *를 인자로 받고,
+		 	bool을 반환하는 함수”를 가리키는 포인터
+			=> 페이지 종류에 따라 초기화 방식이 다르기 때문에 필요함
+		 */
 		bool (*initializer) (struct page *, enum vm_type, void *kva);
 
+		// `type` 값에는 순수한 페이지 타입만 들어있는 게 아니라 
+		// 다른 플래그 비트가 함께 들어있어서 `VM_TYPE(type)`로 하위 비트만 추출하여 기본 타입만 확인
 		if(VM_TYPE(type) == VM_ANON){
-			initializer = anon_initializer;
+			initializer = anon_initializer; // 이름만 쓰면 함수의 주소를 저장
 		}else if(VM_TYPE(type) == VM_FILE){
-			initializer = file_backed_initializer;
+			initializer = file_backed_initializer; // 괄호까지 붙여버리면 당장 호출
 		}else{
 			free(page);
 			goto err;
 		}
 
-		uninit_new(page, upage, init, VM_TYPE(type), aux, initializer);
+		// page를 아직 실제 내용은 없지만,  나중에 초기화할 방법이 등록된 pending page 상태로 설정
+		uninit_new(page, upage, init, type, aux, initializer);
+		page->writable = writable;
+
 
 		/* Insert the page into the spt. */
 		if(!spt_insert_page(spt, page)){
