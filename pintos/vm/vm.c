@@ -211,7 +211,7 @@ vm_claim_page (void *va) {
 	struct page *page = NULL;
 	/* TODO: Fill this function */
 	struct thread* cur_thread = thread_current();
-	page = spt_find_page(cur_thread->spt, va);
+	page = spt_find_page(&cur_thread->spt, va);
 
 	if(page == NULL)
 	{
@@ -226,11 +226,22 @@ static bool
 vm_do_claim_page (struct page *page) {
 	struct frame *frame = vm_get_frame ();
 
+	if(frame == NULL)
+	{
+		return false;
+	}
 	/* Set links */
 	frame->page = page;
 	page->frame = frame;
 
-	if(!pml4_set_page (*base_pml4, page, frame, page->writable)){
+	if(!pml4_set_page (thread_current()->pml4, page->va, frame->kva, page->writable)){
+		lock_acquire (&frame_table_lock);
+		list_remove(&frame->elem);
+		lock_release (&frame_table_lock);
+
+		page->frame = NULL;
+		palloc_free_page(frame->kva);
+		free(frame);
 		return false;
 	}
 
