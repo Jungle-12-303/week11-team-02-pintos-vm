@@ -234,7 +234,7 @@ vm_do_claim_page (struct page *page) {
 	frame->page = page;
 	page->frame = frame;
 
-	if(!pml4_set_page (thread_current()->pml4, page->va, frame->kva, page->writable)){
+	if((!pml4_set_page (thread_current()->pml4, page->va, frame->kva, page->writable)) || (!swap_in(page,frame->kva))){
 		lock_acquire (&frame_table_lock);
 		list_remove(&frame->elem);
 		lock_release (&frame_table_lock);
@@ -245,7 +245,7 @@ vm_do_claim_page (struct page *page) {
 		return false;
 	}
 
-	return swap_in (page, frame->kva);
+	return true;
 }
 
 /* Initialize new supplemental page table */
