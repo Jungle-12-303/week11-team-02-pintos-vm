@@ -7,6 +7,8 @@
 #include "threads/thread.h"
 #include "threads/palloc.h"
 #include "threads/synch.h"
+#include "threads/mmu.h"
+#include "threads/init.h"
 
 static struct list frame_table;
 static struct lock frame_table_lock;
@@ -203,7 +205,7 @@ vm_dealloc_page (struct page *page) {
 
 /* Claim the page that allocate on VA. */
 bool
-vm_claim_page (void *va UNUSED) {
+vm_claim_page (void *va) {
 	struct page *page = NULL;
 	/* TODO: Fill this function */
 
@@ -219,7 +221,9 @@ vm_do_claim_page (struct page *page) {
 	frame->page = page;
 	page->frame = frame;
 
-	/* TODO: Insert page table entry to map page's VA to frame's PA. */
+	if(!pml4_set_page (*base_pml4, page, frame, page->writable)){
+		return false;
+	}
 
 	return swap_in (page, frame->kva);
 }
