@@ -1032,6 +1032,42 @@ done:
 	return success;
 }
 
+
+/* 구현이 안된 이 함수를 넣으라고 함 */
+/* PHDR이 유효한 로드 가능한 세그먼트인지 확인하고 true를 반환합니다. */
+static bool
+validate_segment (const struct Phdr *phdr, struct file *file) {
+	/* p_offset과 p_vaddr은 동일한 페이지 오프셋을 가져야 합니다. */
+	if ((phdr->p_offset & PGMASK) != (phdr->p_vaddr & PGMASK))
+		return false;
+
+	/* p_offset은 파일 내부에 있어야 합니다. */
+	if (phdr->p_offset > (uint64_t) file_length (file))
+		return false;
+
+	/* p_memsz는 p_filesz보다 크거나 같아야 합니다. */
+	if (phdr->p_memsz < phdr->p_filesz)
+		return false;
+
+	/* 세그먼트는 가상 메모리의 유저 영역 내에 위치해야 합니다. */
+	if (!is_user_vaddr ((void *) phdr->p_vaddr))
+		return false;
+	if (!is_user_vaddr ((void *) (phdr->p_vaddr + phdr->p_memsz)))
+		return false;
+
+	/* 주소 영역이 감싸지는(wrap around) 형태가 아니어야 합니다. */
+	if (phdr->p_vaddr + phdr->p_memsz < phdr->p_vaddr)
+		return false;
+
+	/* 0번 페이지는 매핑하지 않습니다.
+	   (NULL 포인터 역참조를 잡기 위해 유효하지 않은 주소로 둡니다.) */
+	if (phdr->p_vaddr < PGSIZE)
+		return false;
+
+	/* 괜찮은 것 같습니다. */
+	return true;
+}
+
 #ifndef VM
 /*
  * 이 블록의 코드는 project 2 동안에만 사용된다.
@@ -1153,40 +1189,6 @@ install_page (void *upage, void *kpage, bool writable) {
 	        pml4_set_page (t->pml4, upage, kpage, writable));
 }
 
-/* 구현이 안된 이 함수를 넣으라고 함 */
-/* PHDR이 유효한 로드 가능한 세그먼트인지 확인하고 true를 반환합니다. */
-static bool
-validate_segment (const struct Phdr *phdr, struct file *file) {
-	/* p_offset과 p_vaddr은 동일한 페이지 오프셋을 가져야 합니다. */
-	if ((phdr->p_offset & PGMASK) != (phdr->p_vaddr & PGMASK))
-		return false;
-
-	/* p_offset은 파일 내부에 있어야 합니다. */
-	if (phdr->p_offset > (uint64_t) file_length (file))
-		return false;
-
-	/* p_memsz는 p_filesz보다 크거나 같아야 합니다. */
-	if (phdr->p_memsz < phdr->p_filesz)
-		return false;
-
-	/* 세그먼트는 가상 메모리의 유저 영역 내에 위치해야 합니다. */
-	if (!is_user_vaddr ((void *) phdr->p_vaddr))
-		return false;
-	if (!is_user_vaddr ((void *) (phdr->p_vaddr + phdr->p_memsz)))
-		return false;
-
-	/* 주소 영역이 감싸지는(wrap around) 형태가 아니어야 합니다. */
-	if (phdr->p_vaddr + phdr->p_memsz < phdr->p_vaddr)
-		return false;
-
-	/* 0번 페이지는 매핑하지 않습니다.
-	   (NULL 포인터 역참조를 잡기 위해 유효하지 않은 주소로 둡니다.) */
-	if (phdr->p_vaddr < PGSIZE)
-		return false;
-
-	/* 괜찮은 것 같습니다. */
-	return true;
-}
 
 #else
 /*
