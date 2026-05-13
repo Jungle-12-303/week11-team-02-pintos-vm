@@ -43,6 +43,14 @@ struct initd_args {
 	struct child_status *cs; // 부모가 만든 자식 상태 레코드
 };
 
+struct load_aux {
+	struct file *file;
+	off_t ofs;
+	uint8_t *upage;
+	size_t page_read_bytes;
+	size_t page_zero_bytes;
+};
+
 /* fd_table 최대 슬롯 수 (4KB 페이지 / 포인터 크기). */
 #define FD_MAX (PGSIZE / sizeof (struct file *))
 
@@ -1241,9 +1249,20 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
 		size_t page_zero_bytes = PGSIZE - page_read_bytes;
 
 		/*
-		 * TODO: lazy_load_segment에 정보를 전달할 aux를 설정하라.
+		 * lazy_load_segment에 정보를 전달할 aux를 설정하라.
 		 */
-		void *aux = NULL;
+		struct load_aux *aux = malloc(sizeof(struct load_aux));
+		
+		if (aux == NULL){
+			return false;
+		}
+
+		aux->file = file;
+		aux->ofs = ofs;
+		aux->upage = upage;
+		aux->page_read_bytes = page_read_bytes;
+		aux->page_zero_bytes = page_zero_bytes;
+		
 		if (!vm_alloc_page_with_initializer (VM_ANON, upage, writable,
 		                                     lazy_load_segment, aux))
 			return false;
