@@ -46,7 +46,6 @@ struct initd_args {
 struct load_aux {
 	struct file *file;
 	off_t ofs;
-	uint8_t *upage;
 	size_t page_read_bytes;
 	size_t page_zero_bytes;
 };
@@ -1040,7 +1039,6 @@ done:
 	return success;
 }
 
-
 /* 구현이 안된 이 함수를 넣으라고 함 */
 /* PHDR이 유효한 로드 가능한 세그먼트인지 확인하고 true를 반환합니다. */
 static bool
@@ -1197,7 +1195,6 @@ install_page (void *upage, void *kpage, bool writable) {
 	        pml4_set_page (t->pml4, upage, kpage, writable));
 }
 
-
 #else
 /*
  * 여기부터의 코드는 project 3 이후에 사용된다.
@@ -1205,16 +1202,33 @@ install_page (void *upage, void *kpage, bool writable) {
  */
 
 static bool
-lazy_load_segment (struct page *page, void *aux) {
+lazy_load_segment (struct page *page, struct load_aux *aux) {
+	void *newpage;
+	struct thread *current = thread_current ();
 	/*
-	 * TODO: 파일에서 세그먼트를 로드하라.
+	 * 파일에서 세그먼트를 로드
+	 */
+	if (file_read (aux->file, page->va, aux->page_read_bytes) != (int) aux->page_read_bytes) {
+		palloc_free_page (page->va);
+		return false;
+	}
+	memset (page->va + aux->page_read_bytes, 0, aux->page_zero_bytes);
+	/*
+	 * 이 함수는 VA 주소에서 첫 번째 페이지 폴트가 발생했을 때 호출된다.
 	 */
 	/*
-	 * TODO: 이 함수는 VA 주소에서 첫 번째 페이지 폴트가 발생했을 때 호출된다.
+	 * 이 함수를 호출할 때 VA를 사용할 수 있다.
 	 */
-	/*
-	 * TODO: 이 함수를 호출할 때 VA를 사용할 수 있다.
-	 */
+	newpage = palloc_get_page (PAL_USER);
+	if (newpage == NULL) {
+		return false;
+	}
+
+	if (!pml4_set_page (current->pml4, pg_round_down (page->va), newpage, page->writable)) {
+		return false;
+	}
+
+	return true;
 }
 
 /*
@@ -1249,20 +1263,19 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
 		size_t page_zero_bytes = PGSIZE - page_read_bytes;
 
 		/*
-		 * lazy_load_segment에 정보를 전달할 aux를 설정하라.
+		 * lazy_load_segment에 정보를 전달할 aux를 설정한다.
 		 */
-		struct load_aux *aux = malloc(sizeof(struct load_aux));
-		
-		if (aux == NULL){
+		struct load_aux *aux = malloc (sizeof (struct load_aux));
+
+		if (aux == NULL) {
 			return false;
 		}
 
 		aux->file = file;
 		aux->ofs = ofs;
-		aux->upage = upage;
 		aux->page_read_bytes = page_read_bytes;
 		aux->page_zero_bytes = page_zero_bytes;
-		
+
 		if (!vm_alloc_page_with_initializer (VM_ANON, upage, writable,
 		                                     lazy_load_segment, aux))
 			return false;
