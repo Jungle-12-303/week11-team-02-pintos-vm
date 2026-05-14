@@ -1204,18 +1204,17 @@ install_page (void *upage, void *kpage, bool writable) {
 static bool
 lazy_load_segment (struct page *page, void *aux) {
 	struct load_aux *load_aux = (struct load_aux *) aux;
-	struct thread *current = thread_current ();
 	/*
 	 * 파일에서 세그먼트를 로드
 	 * 이 함수는 VA 주소에서 첫 번째 페이지 폴트가 발생했을 때 호출된다.
 	 * 이 함수를 호출할 때 VA를 사용할 수 있다.
 	 */
 	if (file_read_at (load_aux->file, page->va, load_aux->page_read_bytes, load_aux->ofs) != (int) load_aux->page_read_bytes) {
-		palloc_free_page (page->va);
+		file_close (load_aux->file);
+		free (aux);
 		return false;
 	}
 	memset (page->va + load_aux->page_read_bytes, 0, load_aux->page_zero_bytes);
-	file_seek (load_aux->file, load_aux->ofs);
 
 	file_close (load_aux->file);
 	free (aux);
@@ -1265,6 +1264,7 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
 
 		aux->file = file_reopen (file);
 		if (aux->file == NULL) {
+			free (aux);
 			return false;
 		}
 		aux->ofs = ofs;
