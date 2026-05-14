@@ -34,7 +34,7 @@ core
 /.vscode/settings.json
 /pintos/.vscode/pintos-test-history.json
 pintos-test-history.json
-/.vscode/c_cpp_properites.json
+/.vscode/c_cpp_properties.json
 
 # CLion 전용 (IDE 코드 분석용)
 CMakeLists.txt
