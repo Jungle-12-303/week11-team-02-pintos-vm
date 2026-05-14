@@ -1208,6 +1208,12 @@ lazy_load_segment (struct page *page, void *aux) {
 	/*
 	* TODO: 파일에서 세그먼트를 로드하라.
 	 */
+	struct file_info* temp_aux = aux;
+
+	file_read_at(temp_aux->file, page->frame->kva, temp_aux->read_bytes, temp_aux->ofs);
+	memset((unsigned char*)page->frame->kva + temp_aux->read_bytes, 0, temp_aux->zero_bytes);
+
+
 	/*
 	 * TODO: 이 함수는 VA 주소에서 첫 번째 페이지 폴트가 발생했을 때 호출된다.
 	 */
