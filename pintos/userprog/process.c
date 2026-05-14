@@ -1207,18 +1207,15 @@ lazy_load_segment (struct page *page, void *aux) {
 	struct thread *current = thread_current ();
 	/*
 	 * 파일에서 세그먼트를 로드
+	 * 이 함수는 VA 주소에서 첫 번째 페이지 폴트가 발생했을 때 호출된다.
+	 * 이 함수를 호출할 때 VA를 사용할 수 있다.
 	 */
-	if (file_read (load_aux->file, page->va, load_aux->page_read_bytes) != (int) load_aux->page_read_bytes) {
+	if (file_read_at (load_aux->file, page->va, load_aux->page_read_bytes, load_aux->ofs) != (int) load_aux->page_read_bytes) {
 		palloc_free_page (page->va);
 		return false;
 	}
 	memset (page->va + load_aux->page_read_bytes, 0, load_aux->page_zero_bytes);
-	/*
-	 * 이 함수는 VA 주소에서 첫 번째 페이지 폴트가 발생했을 때 호출된다.
-	 */
-	/*
-	 * 이 함수를 호출할 때 VA를 사용할 수 있다.
-	 */
+	file_seek (load_aux->file, load_aux->ofs);
 	free (aux);
 
 	return true;
