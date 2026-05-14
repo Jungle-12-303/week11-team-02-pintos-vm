@@ -1199,7 +1199,7 @@ install_page (void *upage, void *kpage, bool writable) {
 static bool
 lazy_load_segment (struct page *page, void *aux) {
 	/*
-	 * TODO: 파일에서 세그먼트를 로드하라.
+	* TODO: 파일에서 세그먼트를 로드하라.
 	 */
 	/*
 	 * TODO: 이 함수는 VA 주소에서 첫 번째 페이지 폴트가 발생했을 때 호출된다.
@@ -1224,6 +1224,14 @@ lazy_load_segment (struct page *page, void *aux) {
  * 성공하면 true를, 메모리 할당 오류나 디스크 읽기 오류가 발생하면 false를
  * 반환한다.
  */
+
+struct file_info {
+	struct file *file;
+	off_t ofs;
+	uint32_t read_bytes;
+	uint32_t zero_bytes;
+};
+
 static bool
 load_segment (struct file *file, off_t ofs, uint8_t *upage,
               uint32_t read_bytes, uint32_t zero_bytes, bool writable) {
@@ -1240,10 +1248,13 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
 		size_t page_read_bytes = read_bytes < PGSIZE ? read_bytes : PGSIZE;
 		size_t page_zero_bytes = PGSIZE - page_read_bytes;
 
-		/*
-		 * TODO: lazy_load_segment에 정보를 전달할 aux를 설정하라.
-		 */
-		void *aux = NULL;
+		/* lazy_load_segment에 정보를 전달할 aux를 설정하라. */
+		struct file_info *aux = malloc(sizeof(struct file_info));
+		aux->file = file;
+		aux->ofs = ofs;
+		aux->read_bytes = page_read_bytes; // 이 페이지에서 파일로부터 읽을 바이트 수
+		aux->zero_bytes = page_zero_bytes; // 이 페이지에서 0으로 채울 바이트 수
+
 		if (!vm_alloc_page_with_initializer (VM_ANON, upage, writable,
 		                                     lazy_load_segment, aux))
 			return false;
