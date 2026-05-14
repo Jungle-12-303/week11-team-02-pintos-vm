@@ -1216,6 +1216,8 @@ lazy_load_segment (struct page *page, void *aux) {
 	}
 	memset (page->va + load_aux->page_read_bytes, 0, load_aux->page_zero_bytes);
 	file_seek (load_aux->file, load_aux->ofs);
+
+	file_close (load_aux->file);
 	free (aux);
 
 	return true;
@@ -1279,6 +1281,7 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
 		read_bytes -= page_read_bytes;
 		zero_bytes -= page_zero_bytes;
 		upage += PGSIZE;
+		aux->ofs += page_read_bytes;
 	}
 	return true;
 }
