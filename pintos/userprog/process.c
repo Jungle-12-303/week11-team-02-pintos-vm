@@ -21,6 +21,7 @@
 #include "threads/vaddr.h"
 #include "devices/timer.h"
 #include "intrinsic.h"
+#include "exception.c"
 #ifdef VM
 #include "vm/vm.h"
 #endif
@@ -1205,21 +1206,35 @@ install_page (void *upage, void *kpage, bool writable) {
 
 static bool
 lazy_load_segment (struct page *page, void *aux) {
+	struct intr_frame f = thread_current()->tf;
+
 	/*
-	* TODO: 파일에서 세그먼트를 로드하라.
+	 * 파일에서 세그먼트를 로드하라.
 	 */
-	struct file_info* temp_aux = aux;
+	struct file_info* temp_aux = aux; // aux를 읽기 위해서 타입 지정
 
-	file_read_at(temp_aux->file, page->frame->kva, temp_aux->read_bytes, temp_aux->ofs);
-	memset((unsigned char*)page->frame->kva + temp_aux->read_bytes, 0, temp_aux->zero_bytes);
+	// PM에 데이터 파일 데이터 올리기
+	off_t bytes_read = file_read_at(temp_aux->file, page->frame->kva, temp_aux->read_bytes, temp_aux->ofs);
+	if(bytes_read != (off_t)temp_aux->read_bytes){ // 실패 시
+		free(temp_aux);
+		return false;
+	}
 
+	// 남은 공간 0으로 채우기
+	memset((unsigned char*)page->frame->kva + temp_aux->read_bytes, 0, temp_aux->zero_bytes);	
 
 	/*
 	 * TODO: 이 함수는 VA 주소에서 첫 번째 페이지 폴트가 발생했을 때 호출된다.
 	 */
+
 	/*
 	 * TODO: 이 함수를 호출할 때 VA를 사용할 수 있다.
+
+
+
 	 */
+	free(temp_aux);
+	return true;
 }
 
 /*
