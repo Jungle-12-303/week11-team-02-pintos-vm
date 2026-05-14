@@ -43,6 +43,13 @@ struct initd_args {
 	struct child_status *cs; // 부모가 만든 자식 상태 레코드
 };
 
+struct file_info {
+	struct file *file;
+	off_t ofs;
+	uint32_t read_bytes;
+	uint32_t zero_bytes;
+};
+
 /* fd_table 최대 슬롯 수 (4KB 페이지 / 포인터 크기). */
 #define FD_MAX (PGSIZE / sizeof (struct file *))
 
@@ -1224,13 +1231,6 @@ lazy_load_segment (struct page *page, void *aux) {
  * 성공하면 true를, 메모리 할당 오류나 디스크 읽기 오류가 발생하면 false를
  * 반환한다.
  */
-
-struct file_info {
-	struct file *file;
-	off_t ofs;
-	uint32_t read_bytes;
-	uint32_t zero_bytes;
-};
 
 static bool
 load_segment (struct file *file, off_t ofs, uint8_t *upage,
