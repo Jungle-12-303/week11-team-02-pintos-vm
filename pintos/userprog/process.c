@@ -1206,8 +1206,6 @@ install_page (void *upage, void *kpage, bool writable) {
 
 static bool
 lazy_load_segment (struct page *page, void *aux) {
-	struct intr_frame f = thread_current()->tf;
-
 	/*
 	 * 파일에서 세그먼트를 로드하라.
 	 */
@@ -1223,16 +1221,6 @@ lazy_load_segment (struct page *page, void *aux) {
 	// 남은 공간 0으로 채우기
 	memset((unsigned char*)page->frame->kva + temp_aux->read_bytes, 0, temp_aux->zero_bytes);	
 
-	/*
-	 * TODO: 이 함수는 VA 주소에서 첫 번째 페이지 폴트가 발생했을 때 호출된다.
-	 */
-
-	/*
-	 * TODO: 이 함수를 호출할 때 VA를 사용할 수 있다.
-
-
-
-	 */
 	free(temp_aux);
 	return true;
 }
