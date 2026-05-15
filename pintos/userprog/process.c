@@ -1346,11 +1346,6 @@ setup_stack (struct intr_frame *if_) {
 		goto done;
 	}
 
-	if (!pml4_set_page (cur_thread->pml4, first_stack_page->va, first_stack_page->frame->kva, true)) {
-		success = false;
-		goto done;
-	}
-
 	if_->rsp = ((uintptr_t) USER_STACK);
 	success = true;
 
