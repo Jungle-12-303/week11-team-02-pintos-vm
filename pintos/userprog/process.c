@@ -1306,9 +1306,7 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
  */
 static bool
 setup_stack (struct intr_frame *if_) {
-	bool success = false;
 	void *stack_bottom = (void *) (((uint8_t *) USER_STACK) - PGSIZE);
-
 	/*
 	 * TODO: stack_bottom에 스택을 매핑하고 페이지를 즉시 claim하라.
 	 * TODO: 성공하면 그에 맞게 rsp를 설정하라.
@@ -1318,34 +1316,27 @@ setup_stack (struct intr_frame *if_) {
 	 * TODO: 여기에 코드를 작성하라.
 	 */
 	if (!vm_alloc_page (VM_ANON | VM_MARKER_0, stack_bottom, true)) {
-		success = false;
-		goto done;
+		return false;
 	}
 	struct thread *cur_thread = thread_current ();
 
 	struct page *first_stack_page = spt_find_page (&cur_thread->spt, stack_bottom);
 
 	if (first_stack_page == NULL) {
-		success = false;
-		goto done;
+		return false;
 	}
 
 	if (!vm_claim_page (stack_bottom)) {
 		spt_remove_page (&cur_thread->spt, first_stack_page);
-		success = false;
-		goto done;
+		return false;
 	}
 
 	if (first_stack_page->frame == NULL) {
-		success = false;
-		goto done;
+		return false;
 	}
 	memset (first_stack_page->frame->kva, 0, PGSIZE);
 
-	if_->rsp = ((uintptr_t) USER_STACK);
-	success = true;
-
-done:
-	return success;
+	if_->rsp = (uintptr_t) USER_STACK;
+	return true;
 }
 #endif /* VM */
