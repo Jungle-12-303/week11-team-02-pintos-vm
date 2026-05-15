@@ -1214,6 +1214,7 @@ lazy_load_segment (struct page *page, void *aux) {
 	// PM에 데이터 파일 데이터 올리기
 	off_t bytes_read = file_read_at(temp_aux->file, page->frame->kva, temp_aux->read_bytes, temp_aux->ofs);
 	if(bytes_read != (off_t)temp_aux->read_bytes){ // 실패 시
+		file_close(temp_aux->file);
 		free(temp_aux);
 		return false;
 	}
@@ -1221,6 +1222,7 @@ lazy_load_segment (struct page *page, void *aux) {
 	// 남은 공간 0으로 채우기
 	memset((unsigned char*)page->frame->kva + temp_aux->read_bytes, 0, temp_aux->zero_bytes);	
 
+	file_close(temp_aux->file);
 	free(temp_aux);
 	return true;
 }
@@ -1254,12 +1256,14 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
 		 * FILE에서 PAGE_READ_BYTES 바이트를 읽고
 		 * 마지막 PAGE_ZERO_BYTES 바이트를 0으로 채운다.
 		 */
+		struct file *copy_file = file_reopen(file);
+
 		size_t page_read_bytes = read_bytes < PGSIZE ? read_bytes : PGSIZE;
 		size_t page_zero_bytes = PGSIZE - page_read_bytes;
 
 		/* lazy_load_segment에 정보를 전달할 aux를 설정하라. */
 		struct file_info *aux = malloc(sizeof(struct file_info));
-		aux->file = file;
+		aux->file = copy_file;
 		aux->ofs = ofs;
 		aux->read_bytes = page_read_bytes; // 이 페이지에서 파일로부터 읽을 바이트 수
 		aux->zero_bytes = page_zero_bytes; // 이 페이지에서 0으로 채울 바이트 수
@@ -1271,7 +1275,7 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
 		/*
 		 * 다음 페이지로 진행한다.
 		 */
-		ofs += read_bytes; // ofs 위치도 업데이트 되어야 함.
+		ofs += page_read_bytes; // ofs 위치도 업데이트 되어야 함.
 		read_bytes -= page_read_bytes;
 		zero_bytes -= page_zero_bytes;
 		upage += PGSIZE;
