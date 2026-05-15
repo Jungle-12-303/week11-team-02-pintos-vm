@@ -1336,6 +1336,12 @@ setup_stack (struct intr_frame *if_) {
 		goto done;
 	}
 
+	if (first_stack_page->frame == NULL) {
+		success = false;
+		goto done;
+	}
+	memset (first_stack_page->frame->kva, 0, PGSIZE);
+
 	if_->rsp = ((uintptr_t) USER_STACK);
 	success = true;
 
