@@ -21,7 +21,6 @@
 #include "threads/vaddr.h"
 #include "devices/timer.h"
 #include "intrinsic.h"
-#include "exception.c"
 #ifdef VM
 #include "vm/vm.h"
 #endif
@@ -42,13 +41,6 @@ struct fork_args {
 struct initd_args {
 	char *file_name;         // 실행할 프로그램 이름 복사본
 	struct child_status *cs; // 부모가 만든 자식 상태 레코드
-};
-
-struct file_info {
-	struct file *file;
-	off_t ofs;
-	uint32_t read_bytes;
-	uint32_t zero_bytes;
 };
 
 /* fd_table 최대 슬롯 수 (4KB 페이지 / 포인터 크기). */
@@ -1204,27 +1196,45 @@ install_page (void *upage, void *kpage, bool writable) {
  * project 2만을 위한 함수를 구현하려면 위쪽 블록에 구현하라.
  */
 
+struct segment_load_aux {
+	struct file *file;
+	off_t ofs;
+	uint32_t read_bytes;
+	uint32_t zero_bytes;
+};
+
 static bool
 lazy_load_segment (struct page *page, void *aux) {
 	/*
-	 * 파일에서 세그먼트를 로드하라.
+	 * TODO: 파일에서 세그먼트를 로드하라.
 	 */
-	struct file_info* temp_aux = aux; // aux를 읽기 위해서 타입 지정
-
-	// PM에 데이터 파일 데이터 올리기
-	off_t bytes_read = file_read_at(temp_aux->file, page->frame->kva, temp_aux->read_bytes, temp_aux->ofs);
-	if(bytes_read != (off_t)temp_aux->read_bytes){ // 실패 시
-		file_close(temp_aux->file);
-		free(temp_aux);
+	/*
+	 * TODO: 이 함수는 VA 주소에서 첫 번째 페이지 폴트가 발생했을 때 호출된다.
+	 */
+	/*
+	 * TODO: 이 함수를 호출할 때 VA를 사용할 수 있다.
+	 */
+	if (aux == NULL)
 		return false;
+
+	struct segment_load_aux *load_aux = aux;
+	bool success = false;
+
+	if (page != NULL && page->frame != NULL && page->frame->kva != NULL) {
+		uint8_t *kva = page->frame->kva;
+		off_t read_bytes = file_read_at (load_aux->file, kva,
+		                                  load_aux->read_bytes,
+		                                  load_aux->ofs);
+
+		if (read_bytes == (off_t) load_aux->read_bytes) {
+			memset (kva + load_aux->read_bytes, 0, load_aux->zero_bytes);
+			success = true;
+		}
 	}
 
-	// 남은 공간 0으로 채우기
-	memset((unsigned char*)page->frame->kva + temp_aux->read_bytes, 0, temp_aux->zero_bytes);	
-
-	file_close(temp_aux->file);
-	free(temp_aux);
-	return true;
+	file_close (load_aux->file);
+	free (load_aux);
+	return success;
 }
 
 /*
@@ -1242,7 +1252,6 @@ lazy_load_segment (struct page *page, void *aux) {
  * 성공하면 true를, 메모리 할당 오류나 디스크 읽기 오류가 발생하면 false를
  * 반환한다.
  */
-
 static bool
 load_segment (struct file *file, off_t ofs, uint8_t *upage,
               uint32_t read_bytes, uint32_t zero_bytes, bool writable) {
@@ -1256,29 +1265,40 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
 		 * FILE에서 PAGE_READ_BYTES 바이트를 읽고
 		 * 마지막 PAGE_ZERO_BYTES 바이트를 0으로 채운다.
 		 */
-		struct file *copy_file = file_reopen(file);
-
 		size_t page_read_bytes = read_bytes < PGSIZE ? read_bytes : PGSIZE;
 		size_t page_zero_bytes = PGSIZE - page_read_bytes;
 
-		/* lazy_load_segment에 정보를 전달할 aux를 설정하라. */
-		struct file_info *aux = malloc(sizeof(struct file_info));
-		aux->file = copy_file;
+		/*
+		 * TODO: lazy_load_segment에 정보를 전달할 aux를 설정하라.
+		 */
+		struct segment_load_aux *aux = malloc (sizeof *aux);
+		if (aux == NULL)
+			return false;
+
+		aux->file = file_reopen (file);
 		aux->ofs = ofs;
-		aux->read_bytes = page_read_bytes; // 이 페이지에서 파일로부터 읽을 바이트 수
-		aux->zero_bytes = page_zero_bytes; // 이 페이지에서 0으로 채울 바이트 수
+		aux->read_bytes = page_read_bytes;
+		aux->zero_bytes = page_zero_bytes;
+
+		if (aux->file == NULL) {
+			free (aux);
+			return false;
+		}
 
 		if (!vm_alloc_page_with_initializer (VM_ANON, upage, writable,
-		                                     lazy_load_segment, aux))
+		                                     lazy_load_segment, aux)) {
+			file_close (aux->file);
+			free (aux);
 			return false;
+		}
 
 		/*
 		 * 다음 페이지로 진행한다.
 		 */
-		ofs += page_read_bytes; // ofs 위치도 업데이트 되어야 함.
 		read_bytes -= page_read_bytes;
 		zero_bytes -= page_zero_bytes;
 		upage += PGSIZE;
+		ofs += page_read_bytes;
 	}
 	return true;
 }
@@ -1296,6 +1316,29 @@ setup_stack (struct intr_frame *if_) {
 	 * TODO: 성공하면 그에 맞게 rsp를 설정하라.
 	 * TODO: 해당 페이지를 스택 페이지로 표시해야 한다.
 	 */
+	/*
+	 * TODO: 여기에 코드를 작성하라.
+	 */
+
+	 //페이지 등록 and spt에 이 생성한 페이지 등록
+	if(vm_alloc_page(VM_ANON, stack_bottom, true))
+	{
+		// 현재 페이지를 페이지테이블에 매핑
+		if(!vm_claim_page(stack_bottom))
+		{
+			struct supplemental_page_table* spt = &thread_current()->spt;
+			struct page* cur_page = spt_find_page(spt, stack_bottom);
+			if(cur_page)
+			{
+				free(cur_page);
+			}
+			return success;
+		}
+
+		if_->rsp = USER_STACK;
+		success = true;
+	}
+
 
 	return success;
 }
