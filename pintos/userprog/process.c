@@ -1317,12 +1317,11 @@ setup_stack (struct intr_frame *if_) {
 	/*
 	 * TODO: 여기에 코드를 작성하라.
 	 */
-	struct page *first_stack_page = malloc (sizeof (struct page));
+	struct page *first_stack_page = vm_alloc_page (VM_ANON | VM_MARKER_0, stack_bottom, true);
 	if (first_stack_page == NULL) {
 		success = false;
 		goto done;
 	}
-	first_stack_page->va = stack_bottom;
 
 	struct thread *cur_thread = thread_current ();
 	if (!spt_insert_page (&cur_thread->spt, first_stack_page)) {
@@ -1334,6 +1333,13 @@ setup_stack (struct intr_frame *if_) {
 		success = false;
 		goto done;
 	}
+
+	if (!swap_in (first_stack_page, first_stack_page->frame->kva)) {
+		success = false;
+		goto done;
+	}
+
+	success = true;
 
 done:
 	return success;
