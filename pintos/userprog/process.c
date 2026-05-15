@@ -1271,6 +1271,7 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
 		/*
 		 * 다음 페이지로 진행한다.
 		 */
+		ofs += read_bytes; // ofs 위치도 업데이트 되어야 함.
 		read_bytes -= page_read_bytes;
 		zero_bytes -= page_zero_bytes;
 		upage += PGSIZE;
@@ -1290,9 +1291,6 @@ setup_stack (struct intr_frame *if_) {
 	 * TODO: stack_bottom에 스택을 매핑하고 페이지를 즉시 claim하라.
 	 * TODO: 성공하면 그에 맞게 rsp를 설정하라.
 	 * TODO: 해당 페이지를 스택 페이지로 표시해야 한다.
-	 */
-	/*
-	 * TODO: 여기에 코드를 작성하라.
 	 */
 
 	return success;
