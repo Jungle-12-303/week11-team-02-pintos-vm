@@ -1323,18 +1323,23 @@ setup_stack (struct intr_frame *if_) {
 	 //페이지 등록 and spt에 이 생성한 페이지 등록
 	if(vm_alloc_page(VM_ANON, stack_bottom, true))
 	{
-		// 현재 페이지를 페이지테이블에 매핑
+		// 현재 페이지를 페이지 테이블에 매핑
 		if(!vm_claim_page(stack_bottom))
 		{
+			//현재 스레드의 spt 받아온다
 			struct supplemental_page_table* spt = &thread_current()->spt;
+			
+			//spt에서 va를 가진 page를 찾는다
 			struct page* cur_page = spt_find_page(spt, stack_bottom);
-			if(cur_page)
-			{
-				free(cur_page);
-			}
+
+			//spt에서 그 page를 찾는다
+			spt_remove_page(spt, cur_page);
+
+
 			return success;
 		}
 
+		//rsp를 
 		if_->rsp = USER_STACK;
 		success = true;
 	}
