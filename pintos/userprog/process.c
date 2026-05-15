@@ -1210,12 +1210,33 @@ struct segment_load_aux {
 
 static bool
 lazy_load_segment (struct page *page, void *aux) {
-	struct load_aux *load_aux = (struct load_aux *) aux;
+	struct segment_load_aux *load_aux = aux;
 	/*
 	 * 파일에서 세그먼트를 로드
 	 * 이 함수는 VA 주소에서 첫 번째 페이지 폴트가 발생했을 때 호출된다.
 	 * 이 함수를 호출할 때 VA를 사용할 수 있다.
 	 */
+	if (load_aux == NULL || page == NULL || page->frame == NULL ||
+	    page->frame->kva == NULL) {
+		file_close (load_aux->file);
+		free (load_aux);
+		return false;
+	}
+
+	if (file_read_at (load_aux->file, page->frame->kva,
+	                  load_aux->read_bytes,
+	                  load_aux->ofs) != (int) load_aux->read_bytes) {
+		file_close (load_aux->file);
+		free (load_aux);
+		return false;
+	}
+
+	memset ((uint8_t *) page->frame->kva + load_aux->read_bytes, 0,
+	        load_aux->zero_bytes);
+
+	file_close (load_aux->file);
+	free (load_aux);
+	return true;
 }
 
 /*
@@ -1252,10 +1273,26 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
 		/*
 		 * lazy_load_segment에 정보를 전달할 aux를 설정한다.
 		 */
-		void *aux = NULL;
-		if (!vm_alloc_page_with_initializer (VM_ANON, upage, writable,
-		                                     lazy_load_segment, aux))
+		struct load_aux *aux = malloc (sizeof (struct load_aux));
+		if (aux == NULL)
 			return false;
+
+		aux->file = file_reopen (file);
+		if (aux->file == NULL) {
+			free (aux);
+			return false;
+		}
+
+		aux->ofs = ofs;
+		aux->page_read_bytes = page_read_bytes;
+		aux->page_zero_bytes = page_zero_bytes;
+
+		if (!vm_alloc_page_with_initializer (VM_ANON, upage, writable,
+		                                     lazy_load_segment, aux)) {
+			file_close (aux->file);
+			free (aux);
+			return false;
+		}
 
 		/*
 		 * 다음 페이지로 진행한다.
