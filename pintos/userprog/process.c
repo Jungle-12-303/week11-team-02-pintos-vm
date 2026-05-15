@@ -1263,7 +1263,6 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
  */
 static bool
 setup_stack (struct intr_frame *if_) {
-	bool success = false;
 	void *stack_bottom = (void *) (((uint8_t *) USER_STACK) - PGSIZE);
 
 	/*
@@ -1274,7 +1273,13 @@ setup_stack (struct intr_frame *if_) {
 	/*
 	 * TODO: 여기에 코드를 작성하라.
 	 */
+	if (!vm_alloc_page (VM_ANON | VM_MARKER_0, stack_bottom, true))
+		return false;
 
-	return success;
+	if (!vm_claim_page (stack_bottom))
+		return false;
+
+	if_->rsp = USER_STACK;
+	return true;
 }
 #endif /* VM */
