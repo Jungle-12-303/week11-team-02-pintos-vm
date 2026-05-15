@@ -1276,7 +1276,7 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
 		/*
 		 * lazy_load_segment에 정보를 전달할 aux를 설정한다.
 		 */
-		struct load_aux *aux = malloc (sizeof (struct load_aux));
+		struct segment_load_aux *aux = malloc (sizeof (struct segment_load_aux));
 		if (aux == NULL)
 			return false;
 
@@ -1287,8 +1287,8 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
 		}
 
 		aux->ofs = ofs;
-		aux->page_read_bytes = page_read_bytes;
-		aux->page_zero_bytes = page_zero_bytes;
+		aux->read_bytes = page_read_bytes;
+		aux->zero_bytes = page_zero_bytes;
 
 		if (!vm_alloc_page_with_initializer (VM_ANON, upage, writable,
 		                                     lazy_load_segment, aux)) {
