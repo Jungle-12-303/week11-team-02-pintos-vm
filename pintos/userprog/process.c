@@ -1032,7 +1032,6 @@ done:
 	return success;
 }
 
-
 /* 구현이 안된 이 함수를 넣으라고 함 */
 /* PHDR이 유효한 로드 가능한 세그먼트인지 확인하고 true를 반환합니다. */
 static bool
@@ -1189,7 +1188,6 @@ install_page (void *upage, void *kpage, bool writable) {
 	        pml4_set_page (t->pml4, upage, kpage, writable));
 }
 
-
 #else
 /*
  * 여기부터의 코드는 project 3 이후에 사용된다.
@@ -1223,8 +1221,8 @@ lazy_load_segment (struct page *page, void *aux) {
 	if (page != NULL && page->frame != NULL && page->frame->kva != NULL) {
 		uint8_t *kva = page->frame->kva;
 		off_t read_bytes = file_read_at (load_aux->file, kva,
-		                                  load_aux->read_bytes,
-		                                  load_aux->ofs);
+		                                 load_aux->read_bytes,
+		                                 load_aux->ofs);
 
 		if (read_bytes == (off_t) load_aux->read_bytes) {
 			memset (kva + load_aux->read_bytes, 0, load_aux->zero_bytes);
@@ -1319,7 +1317,25 @@ setup_stack (struct intr_frame *if_) {
 	/*
 	 * TODO: 여기에 코드를 작성하라.
 	 */
+	struct page *first_stack_page = malloc (sizeof (struct page));
+	if (first_stack_page == NULL) {
+		success = false;
+		goto done;
+	}
+	first_stack_page->va = stack_bottom;
 
+	struct thread *cur_thread = thread_current ();
+	if (!spt_insert_page (&cur_thread->spt, first_stack_page)) {
+		success = false;
+		goto done;
+	}
+
+	if (!vm_claim_page (stack_bottom)) {
+		success = false;
+		goto done;
+	}
+
+done:
 	return success;
 }
 #endif /* VM */
