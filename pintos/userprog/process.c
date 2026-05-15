@@ -1329,16 +1329,23 @@ setup_stack (struct intr_frame *if_) {
 		goto done;
 	}
 
-	if (!vm_claim_page (stack_bottom)) {
-		success = false;
-		goto done;
-	}
-
 	if (!swap_in (first_stack_page, first_stack_page->frame->kva)) {
 		success = false;
 		goto done;
 	}
 
+	if (!vm_claim_page (stack_bottom)) {
+		spt_remove_page (&cur_thread->spt, first_stack_page);
+		success = false;
+		goto done;
+	}
+
+	if (!pml4_set_page (cur_thread->pml4, first_stack_page->va, first_stack_page->frame->kva, true)) {
+		success = false;
+		goto done;
+	}
+
+	if_->rsp = ((uint8_t *) USER_STACK);
 	success = true;
 
 done:
