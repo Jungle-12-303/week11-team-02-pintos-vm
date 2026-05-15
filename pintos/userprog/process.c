@@ -1330,18 +1330,13 @@ setup_stack (struct intr_frame *if_) {
 		goto done;
 	}
 
-	if (!spt_insert_page (&cur_thread->spt, first_stack_page)) {
+	if (!vm_claim_page (stack_bottom)) {
+		spt_remove_page (&cur_thread->spt, first_stack_page);
 		success = false;
 		goto done;
 	}
 
 	if (!swap_in (first_stack_page, first_stack_page->frame->kva)) {
-		success = false;
-		goto done;
-	}
-
-	if (!vm_claim_page (stack_bottom)) {
-		spt_remove_page (&cur_thread->spt, first_stack_page);
 		success = false;
 		goto done;
 	}
