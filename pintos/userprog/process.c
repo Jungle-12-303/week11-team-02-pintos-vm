@@ -1211,32 +1211,35 @@ struct segment_load_aux {
 static bool
 lazy_load_segment (struct page *page, void *aux) {
 	struct segment_load_aux *load_aux = aux;
+	bool success = false;
 	/*
 	 * 파일에서 세그먼트를 로드
 	 * 이 함수는 VA 주소에서 첫 번째 페이지 폴트가 발생했을 때 호출된다.
 	 * 이 함수를 호출할 때 VA를 사용할 수 있다.
 	 */
-	if (load_aux == NULL || page == NULL || page->frame == NULL ||
-	    page->frame->kva == NULL) {
-		file_close (load_aux->file);
-		free (load_aux);
+	if (load_aux == NULL) {
 		return false;
+	}
+	if (page == NULL || page->frame == NULL ||
+	    page->frame->kva == NULL) {
+		goto done;
 	}
 
 	if (file_read_at (load_aux->file, page->frame->kva,
 	                  load_aux->read_bytes,
 	                  load_aux->ofs) != (int) load_aux->read_bytes) {
-		file_close (load_aux->file);
-		free (load_aux);
-		return false;
+		goto done;
 	}
 
 	memset ((uint8_t *) page->frame->kva + load_aux->read_bytes, 0,
 	        load_aux->zero_bytes);
 
+	success = true;
+
+done:
 	file_close (load_aux->file);
 	free (load_aux);
-	return true;
+	return success;
 }
 
 /*
