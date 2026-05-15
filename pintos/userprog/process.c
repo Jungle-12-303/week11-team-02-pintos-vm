@@ -1336,11 +1336,6 @@ setup_stack (struct intr_frame *if_) {
 		goto done;
 	}
 
-	if (!swap_in (first_stack_page, first_stack_page->frame->kva)) {
-		success = false;
-		goto done;
-	}
-
 	if_->rsp = ((uintptr_t) USER_STACK);
 	success = true;
 
