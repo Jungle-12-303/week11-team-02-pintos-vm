@@ -1321,7 +1321,7 @@ setup_stack (struct intr_frame *if_) {
 	 */
 
 	 //페이지 등록 and spt에 이 생성한 페이지 등록
-	if(vm_alloc_page(VM_ANON, stack_bottom, true))
+	if(vm_alloc_page(VM_ANON | VM_MARKER_0, stack_bottom, true))
 	{
 		// 현재 페이지를 페이지 테이블에 매핑
 		if(!vm_claim_page(stack_bottom))
