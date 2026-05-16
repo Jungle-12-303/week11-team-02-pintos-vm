@@ -208,8 +208,8 @@ vm_get_frame (void) {
 }
 
 /* Growing the stack. */
-static void
-vm_stack_growth (void *addr UNUSED) {
+static bool
+vm_stack_growth (void *addr) {
 
 	// fault addr를 페이지 시작 주소로 내린다
 	//그 주소에 anoymous page를 할당한다
@@ -220,14 +220,16 @@ vm_stack_growth (void *addr UNUSED) {
 	//페이지 등록, spt에 넣는다
 	if(!vm_alloc_page_with_initializer(VM_ANON, pg_round_down(addr), true, NULL, NULL))
 	{
-		return;
+		return false;
 	}
 
 	//frame 할당 받아서 페이지 테이블에 매핑한다
-	if(!vm_claim_page(addr))
+	if(!vm_claim_page(pg_round_down(addr)))
 	{
-		return;
+		return false;
 	}
+
+	return true;
 }
 
 /* Handle the fault on write_protected page */
@@ -275,8 +277,11 @@ vm_try_handle_fault (struct intr_frame *f, void *addr,
 		if(addr < USER_STACK && addr >= rsp - 8 && addr > USER_STACK - 1024 * 1024)
 		{
 			// 스택 크기 키워라
-			vm_stack_growth(addr);
-			// 여기 고쳐야함
+			if(!vm_stack_growth(addr))
+			{
+				return false;
+			}
+			
 			return true;
 		}
 		else
