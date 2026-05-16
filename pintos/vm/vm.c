@@ -217,9 +217,8 @@ vm_stack_growth (void *addr, struct intr_frame *f, bool write) {
 	if (f->rsp <= (uintptr_t) USER_STACK - ONE_MB){
 		return;
 	}
-	void *dst = pg_round_down(addr) - PGSIZE;
+	void *dst = pg_round_down(addr);
 	vm_alloc_page(VM_ANON|VM_MARKER_0, dst ,write);
-	f->rsp = (uintptr_t) dst;
 }
 
 /* Handle the fault on write_protected page */
@@ -235,7 +234,7 @@ vm_try_handle_fault (struct intr_frame *f, void *addr,
 	struct page *page = NULL;
 	/* TODO: Validate the fault */
 	/* TODO: Your code goes here */
-	if(addr == NULL || !user || not_present){
+	if(addr == NULL || !user || !not_present){
 		return false;
 	}
 	page = spt_find_page(spt,addr);
