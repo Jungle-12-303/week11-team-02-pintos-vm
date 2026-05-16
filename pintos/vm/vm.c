@@ -219,9 +219,9 @@ vm_handle_wp (struct page *page UNUSED) {
 
 /* Return true on success */
 bool
-vm_try_handle_fault (struct intr_frame *f UNUSED, void *addr UNUSED,
-		bool user UNUSED, bool write UNUSED, bool not_present UNUSED) {
-	struct supplemental_page_table *spt UNUSED = &thread_current ()->spt;
+vm_try_handle_fault (struct intr_frame *f, void *addr,
+		bool user, bool write, bool not_present) {
+	struct supplemental_page_table *spt = &thread_current ()->spt;
 	struct page *page = NULL;
 	/* TODO: Validate the fault */
 	/* TODO: Your code goes here */
@@ -236,13 +236,13 @@ vm_try_handle_fault (struct intr_frame *f UNUSED, void *addr UNUSED,
 
 	// 여기서부터 권한 위반은 아니다
 
-	struct page* page = spt_find_page(spt, addr);
+	page = spt_find_page(spt, addr);
 
 	// spt에 페이지가 없다면
 	if(page == NULL)
 	{
 		// addr이 스택 성장 가능한 주소인지 검사
-		if(addr > f->rsp - 8)
+		if(addr > f->rsp - 8 && addr < USER_STACK && addr > USER_STACK - 1024 * 1024)
 		{
 			// 스택 크기 키워라
 			vm_stack_growth(addr);
@@ -259,7 +259,7 @@ vm_try_handle_fault (struct intr_frame *f UNUSED, void *addr UNUSED,
 	{
 
 		//page의 writable과 write의 형식이 다르면 false 처리
-		if(page->writable != write)
+		if(write == true && page->writable == false)
 		{
 			return false;
 		}
