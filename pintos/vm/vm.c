@@ -212,11 +212,7 @@ vm_get_frame (void) {
 
 /* Growing the stack. */
 static void
-vm_stack_growth (void *addr, struct intr_frame *f, bool write) {
-	// rsp 근처 접근 검사, 최대 stack 1MB 검사
-	if (f->rsp <= (uintptr_t) USER_STACK - ONE_MB){
-		return;
-	}
+vm_stack_growth (void *addr,uintptr_t rsp, bool write) {
 	void *dst = pg_round_down(addr);
 	vm_alloc_page(VM_ANON|VM_MARKER_0, dst ,write);
 }
@@ -234,13 +230,29 @@ vm_try_handle_fault (struct intr_frame *f, void *addr,
 	struct page *page = NULL;
 	/* TODO: Validate the fault */
 	/* TODO: Your code goes here */
-	if(addr == NULL || !user || !not_present){
+	uintptr_t rsp = NULL;
+
+	if(addr == NULL || addr == NULL || !not_present){
 		return false;
 	}
 	page = spt_find_page(spt,addr);
 	if (page == NULL){
-		vm_stack_growth(addr, f, write);
-		return true;
+		if (user){
+			rsp = f->rsp;
+		} else {
+			rsp = thread_current()->user_rsp;
+		}
+
+		if (rsp - (uint8_t)addr > 8 && rsp <= (uintptr_t) USER_STACK - ONE_MB){
+			return false;
+		}
+
+		vm_stack_growth(addr, rsp, write);
+
+		// 실제로 처리 되었는 지
+		if(spt_find_page(spt,addr)){
+			return true;
+		}
 	}
 	return vm_do_claim_page (page);
 }

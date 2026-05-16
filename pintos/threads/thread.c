@@ -158,6 +158,10 @@ thread_init (void) {
 	init_thread (initial_thread, "main", PRI_DEFAULT);
 	initial_thread->status = THREAD_RUNNING;
 	initial_thread->tid = allocate_tid ();
+	
+	#ifdef VM
+	initial_thread->user_rsp = 0;
+	#endif
 }
 
 /*
