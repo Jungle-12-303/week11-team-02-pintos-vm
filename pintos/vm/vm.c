@@ -250,6 +250,7 @@ vm_try_handle_fault (struct intr_frame *f, void *addr,
 
 		vm_stack_growth(addr, rsp, write);
 
+		page = spt_find_page(spt,addr);
 		// 실제로 처리 되었는 지
 		if(page->frame != NULL){
 			return true;
