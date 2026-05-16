@@ -210,6 +210,24 @@ vm_get_frame (void) {
 /* Growing the stack. */
 static void
 vm_stack_growth (void *addr UNUSED) {
+
+	// fault addr를 페이지 시작 주소로 내린다
+	//그 주소에 anoymous page를 할당한다
+	//그 page를 SPT에 넣는다
+	// 그 page를 claim해서 실제 frame을 붙인다
+	// page table에 VA->frame 매핑이 생긴다
+
+	//페이지 등록, spt에 넣는다
+	if(!vm_alloc_page_with_initializer(VM_ANON, pg_round_down(addr), true, NULL, NULL))
+	{
+		return;
+	}
+
+	//frame 할당 받아서 페이지 테이블에 매핑한다
+	if(!vm_claim_page(addr))
+	{
+		return;
+	}
 }
 
 /* Handle the fault on write_protected page */
