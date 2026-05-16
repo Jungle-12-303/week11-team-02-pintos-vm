@@ -92,6 +92,8 @@ syscall_init (void) {
  */
 void
 syscall_handler (struct intr_frame *f UNUSED) {
+	thread_current()->tf = *f;
+	
 	switch (f->R.rax) {
 	case SYS_HALT:
 		halt ();

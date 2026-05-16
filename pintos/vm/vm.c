@@ -274,7 +274,7 @@ vm_try_handle_fault (struct intr_frame *f, void *addr,
 		}
 
 		// addr이 스택 성장 가능한 주소인지 검사
-		if(addr < USER_STACK && addr >= rsp - 8 && addr > USER_STACK - 1024 * 1024)
+		if(addr < USER_STACK && addr >= rsp - 8 && addr >= USER_STACK - 1024 * 1024)
 		{
 			// 스택 크기 키워라
 			if(!vm_stack_growth(addr))
