@@ -229,7 +229,7 @@ vm_try_handle_fault (struct intr_frame *f, void *addr,
 	if(addr == NULL || !user || not_present){
 		return false;
 	}
-	page = spt_find_page(spt, pg_round_down(addr));
+	page = spt_find_page(spt,addr);
 	if (page == NULL){
 		vm_stack_growth(addr);
 		return true;
