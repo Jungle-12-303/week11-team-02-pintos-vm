@@ -244,7 +244,11 @@ vm_try_handle_fault (struct intr_frame *f, void *addr,
 			rsp = thread_current()->user_rsp;
 		}
 
-		if (!(addr < USER_STACK && rsp - (uintptr_t)addr <= 8 && addr > USER_STACK - ONE_MB)){
+		if (!(addr < USER_STACK && addr > USER_STACK - ONE_MB)){
+			return false;
+		}
+
+		if (!(addr >= rsp - 8)){
 			return false;
 		}
 
