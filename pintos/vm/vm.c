@@ -225,8 +225,47 @@ vm_try_handle_fault (struct intr_frame *f UNUSED, void *addr UNUSED,
 	struct page *page = NULL;
 	/* TODO: Validate the fault */
 	/* TODO: Your code goes here */
+	
+	// addr이 유저 영역의 주소가 아니면 
+	// not_present = true : 이 가상 주소에 대해 현재 페이지 테이블에 유효한 물리 프레임 매핑이 없다
+	// not_present = false : 페이지는 존재하는데 접근 권한이 잘못되었다
+	if(addr == NULL || !is_user_vaddr(addr) || not_present == false)
+	{
+		return false;
+	}
 
-	return vm_do_claim_page (page);
+	// 여기서부터 권한 위반은 아니다
+
+	struct page* page = spt_find_page(spt, addr);
+
+	// spt에 페이지가 없다면
+	if(page == NULL)
+	{
+		// addr이 스택 성장 가능한 주소인지 검사
+		if(addr > f->rsp - 8)
+		{
+			// 스택 크기 키워라
+			vm_stack_growth(addr);
+			return true;
+		}
+		else
+		{
+			return false;
+		}
+		
+	}
+	// spt에 페이지가 있다면
+	else
+	{
+
+		//page의 writable과 write의 형식이 다르면 false 처리
+		if(page->writable != write)
+		{
+			return false;
+		}
+
+		return vm_do_claim_page (page);
+	}
 }
 
 /* Free the page.
