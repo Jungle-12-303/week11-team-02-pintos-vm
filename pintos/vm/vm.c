@@ -223,6 +223,7 @@ vm_try_handle_fault (struct intr_frame *f, void *addr,
 		bool user, bool write, bool not_present) {
 	struct supplemental_page_table *spt = &thread_current ()->spt;
 	struct page *page = NULL;
+	void *rsp = NULL;
 	/* TODO: Validate the fault */
 	/* TODO: Your code goes here */
 	
@@ -241,11 +242,23 @@ vm_try_handle_fault (struct intr_frame *f, void *addr,
 	// spt에 페이지가 없다면
 	if(page == NULL)
 	{
+		// 유저 모드에서 fault 발생
+		if(user)
+		{
+			rsp = f->rsp;
+		}
+		// 커널 모드에서 fault 발생
+		else
+		{
+			rsp  = thread_current()->tf.rsp;
+		}
+
 		// addr이 스택 성장 가능한 주소인지 검사
-		if(addr > f->rsp - 8 && addr < USER_STACK && addr > USER_STACK - 1024 * 1024)
+		if(addr < USER_STACK && addr >= rsp - 8 && addr > USER_STACK - 1024 * 1024)
 		{
 			// 스택 크기 키워라
 			vm_stack_growth(addr);
+			// 여기 고쳐야함
 			return true;
 		}
 		else
