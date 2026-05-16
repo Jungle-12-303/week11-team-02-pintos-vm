@@ -10,6 +10,8 @@
 #include "threads/mmu.h"
 #include "threads/init.h"
 
+#define ONE_MB (1 << 20) // 1MB
+
 static struct list frame_table;
 static struct lock frame_table_lock;
 
@@ -210,7 +212,14 @@ vm_get_frame (void) {
 
 /* Growing the stack. */
 static void
-vm_stack_growth (void *addr UNUSED) {
+vm_stack_growth (void *addr, struct intr_frame *f, bool write) {
+	// rsp 근처 접근 검사, 최대 stack 1MB 검사
+	if (f->rsp <= (uintptr_t) USER_STACK - ONE_MB){
+		return;
+	}
+	void *dst = pg_round_down(addr) - PGSIZE;
+	vm_alloc_page(VM_ANON|VM_MARKER_0, dst ,write);
+	f->rsp = (uintptr_t) dst;
 }
 
 /* Handle the fault on write_protected page */
@@ -221,7 +230,7 @@ vm_handle_wp (struct page *page UNUSED) {
 /* Return true on success */
 bool
 vm_try_handle_fault (struct intr_frame *f, void *addr,
-		bool user, bool write UNUSED, bool not_present UNUSED) {
+		bool user, bool write, bool not_present) {
 	struct supplemental_page_table *spt = &thread_current ()->spt;
 	struct page *page = NULL;
 	/* TODO: Validate the fault */
@@ -231,7 +240,7 @@ vm_try_handle_fault (struct intr_frame *f, void *addr,
 	}
 	page = spt_find_page(spt,addr);
 	if (page == NULL){
-		vm_stack_growth(addr);
+		vm_stack_growth(addr, f, write);
 		return true;
 	}
 	return vm_do_claim_page (page);
