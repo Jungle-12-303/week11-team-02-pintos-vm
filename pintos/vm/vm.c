@@ -232,7 +232,7 @@ vm_try_handle_fault (struct intr_frame *f, void *addr,
 	/* TODO: Your code goes here */
 	uintptr_t rsp = NULL;
 
-	if(addr == NULL || addr == NULL || !not_present){
+	if(f == NULL || addr == NULL || !not_present){
 		return false;
 	}
 	page = spt_find_page(spt,addr);
@@ -243,7 +243,7 @@ vm_try_handle_fault (struct intr_frame *f, void *addr,
 			rsp = thread_current()->user_rsp;
 		}
 
-		if (rsp - (uint8_t)addr > 8 && rsp <= (uintptr_t) USER_STACK - ONE_MB){
+		if (addr < USER_STACK && rsp - (uint8_t)addr >= 8 && addr > USER_STACK - 1024 * 1024){
 			return false;
 		}
 
