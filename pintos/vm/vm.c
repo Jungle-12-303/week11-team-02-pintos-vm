@@ -215,6 +215,7 @@ static void
 vm_stack_growth (void *addr,uintptr_t rsp, bool write) {
 	void *dst = pg_round_down(addr);
 	vm_alloc_page(VM_ANON|VM_MARKER_0, dst ,write);
+	vm_claim_page(dst);
 }
 
 /* Handle the fault on write_protected page */
@@ -243,14 +244,14 @@ vm_try_handle_fault (struct intr_frame *f, void *addr,
 			rsp = thread_current()->user_rsp;
 		}
 
-		if (addr < USER_STACK && rsp - (uint8_t)addr >= 8 && addr > USER_STACK - 1024 * 1024){
+		if (!(addr < USER_STACK && rsp - (uintptr_t)addr <= 8 && addr > USER_STACK - ONE_MB)){
 			return false;
 		}
 
 		vm_stack_growth(addr, rsp, write);
 
 		// 실제로 처리 되었는 지
-		if(spt_find_page(spt,addr)){
+		if(page->frame != NULL){
 			return true;
 		}
 	}
