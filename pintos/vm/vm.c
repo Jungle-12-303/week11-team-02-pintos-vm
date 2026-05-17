@@ -240,25 +240,26 @@ vm_try_handle_fault (struct intr_frame *f UNUSED, void *addr UNUSED,
 	}
 
 	page = spt_find_page(spt, addr);
-	if(page == NULL){ //  spt에 페이지가 없는 경우
+	if(page == NULL){ //  spt에 페이지가 없는 경우 = crash거나 stack_growth 후보
 
+		// Allocate additional pages only if they "appear" to be stack accesses.
+		if( (thread_current()->user_rsp > addr) && // 현재 스택에서 아래로 자라려는 접근인가? // 이따가 user_rsp에 값 넣어주러 가야함쓰~
+			(addr > (USER_STACK - ONE_MB))  ){ // 지금 확장하려는 주소가 하한선 아래로 벗어나지는 않는가?
+
+			vm_stack_growth(addr);
+			return true;
+
+		} else{
+			return false;
+		}
+
+	} else { // spt에 page가 있음!
 		// 페이지 관련 권한위반 체크 - 쓰기를 시도했는데, 읽기 전용 페이지인 경우
 		if(write && !page->writable){ 
 			return false;
 		}
 		
-		// Allocate additional pages only if they "appear" to be stack accesses.
-		if( (thread_current()->user_rsp > addr) && // 현재 스택에서 아래로 자라려는 접근인가?
-			(addr > (USER_STACK - ONE_MB))  ){ // 지금 확장하려는 주소가 하한선 아래로 벗어나는가?
-
-			vm_stack_growth(addr);
-			return vm_do_claim_page (page);
-		} else{
-			return false;
-		}
-
-	} else { // stack에 page가 있음!
-	return vm_do_claim_page (page);
+		return vm_do_claim_page (page);
 	}
 }
 
