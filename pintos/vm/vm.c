@@ -230,34 +230,36 @@ vm_try_handle_fault (struct intr_frame *f UNUSED, void *addr UNUSED,
 
 	// 권한위반 체크 - 접근방식이 허용되지 않음
 	if(!not_present){
-		return false;
+		return false; // 위반! vm_try_handle_faule를 호출한 함수에서 process kill해줄 예정
 	}
 
 	// 1. 유저영역에 해당하는 주소인가(유저 스택 영역보다 넘지는 않는가?)?
-	// 2. adrr가 NULL은 아닌가? 3. 너무 낮은 주소인가?
+	// 2. adrr가 NULL은 아닌가?
 	if(!is_user_vaddr(addr) || addr == NULL){ // 주소 유효성 검사
-		return false; // 위반! vm_try_handle_faule를 호출한 함수에서 process kill해줄 예정
+		return false;
 	}
 
 	page = spt_find_page(spt, addr);
 	if(page == NULL){ //  spt에 페이지가 없는 경우
 
+		// 페이지 관련 권한위반 체크 - 쓰기를 시도했는데, 읽기 전용 페이지인 경우
+		if(write && !page->writable){ 
+			return false;
+		}
 		
-		// (not_present == false && page != NULL && (write && !page->writable) )
-		// strack_grow 조건을 만족하는가?
-
-		if(thread_current()->user_rsp > addr 
-			&& (thread_current()->user_rsp > (USER_STACK - ONE_MB))  ){ 
+		// Allocate additional pages only if they "appear" to be stack accesses.
+		if( (thread_current()->user_rsp > addr) && // 현재 스택에서 아래로 자라려는 접근인가?
+			(addr > (USER_STACK - ONE_MB))  ){ // 지금 확장하려는 주소가 하한선 아래로 벗어나는가?
 
 			vm_stack_growth(addr);
-			return true;
+			return vm_do_claim_page (page);
+		} else{
+			return false;
 		}
 
 	} else { // stack에 page가 있음!
 	return vm_do_claim_page (page);
 	}
-	
-	
 }
 
 /* Free the page.
