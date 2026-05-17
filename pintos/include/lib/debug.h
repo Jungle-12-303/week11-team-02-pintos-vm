@@ -9,6 +9,13 @@
 #define NO_INLINE __attribute__ ((noinline))
 #define PRINTF_FORMAT(FMT, FIRST) __attribute__ ((format (printf, FMT, FIRST)))
 
+#define RETURN_IF(CONDITION) \
+	do { if (CONDITION) return; } while (0)
+#define RETURN_VALUE_IF(CONDITION, VALUE) \
+	do { if (CONDITION) return (VALUE); } while (0)
+#define GOTO_IF(CONDITION, LABEL) \
+	do { if (CONDITION) goto LABEL; } while (0)
+
 /* Halts the OS, printing the source file name, line number, and
  * function name, plus a user-specific message. */
 #define PANIC(...) debug_panic (__FILE__, __LINE__, __func__, __VA_ARGS__)
