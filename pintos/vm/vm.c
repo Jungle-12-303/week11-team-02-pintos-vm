@@ -10,6 +10,8 @@
 #include "threads/mmu.h"
 #include "threads/init.h"
 
+#define ONE_MB (1 << 20) // 1MB
+
 static struct list frame_table;
 static struct lock frame_table_lock;
 
@@ -210,6 +212,7 @@ vm_get_frame (void) {
 /* Growing the stack. */
 static void
 vm_stack_growth (void *addr UNUSED) {
+	vm_claim_page(pg_round_down(addr));
 }
 
 /* Handle the fault on write_protected page */
@@ -224,9 +227,37 @@ vm_try_handle_fault (struct intr_frame *f UNUSED, void *addr UNUSED,
 	struct supplemental_page_table *spt UNUSED = &thread_current ()->spt;
 	struct page *page = NULL;
 	/* TODO: Validate the fault */
-	/* TODO: Your code goes here */
 
+	// 권한위반 체크 - 접근방식이 허용되지 않음
+	if(!not_present){
+		return false;
+	}
+
+	// 1. 유저영역에 해당하는 주소인가(유저 스택 영역보다 넘지는 않는가?)?
+	// 2. adrr가 NULL은 아닌가? 3. 너무 낮은 주소인가?
+	if(!is_user_vaddr(addr) || addr == NULL){ // 주소 유효성 검사
+		return false; // 위반! vm_try_handle_faule를 호출한 함수에서 process kill해줄 예정
+	}
+
+	page = spt_find_page(spt, addr);
+	if(page == NULL){ //  spt에 페이지가 없는 경우
+
+		
+		// (not_present == false && page != NULL && (write && !page->writable) )
+		// strack_grow 조건을 만족하는가?
+
+		if(thread_current()->user_rsp > addr 
+			&& (thread_current()->user_rsp > (USER_STACK - ONE_MB))  ){ 
+
+			vm_stack_growth(addr);
+			return true;
+		}
+
+	} else { // stack에 page가 있음!
 	return vm_do_claim_page (page);
+	}
+	
+	
 }
 
 /* Free the page.
