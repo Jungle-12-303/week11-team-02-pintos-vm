@@ -212,6 +212,9 @@ vm_get_frame (void) {
 /* Growing the stack. */
 static void
 vm_stack_growth (void *addr UNUSED) {
+	// 현재 폴트난 주소가 과거 유저 스택에 할당한 주소 기준 
+	// 얼마나 멀리 내려와 있나요?
+	// 내려온 페이지 크기 만큼 순회하며 할당해주세요
 	vm_claim_page(pg_round_down(addr));
 }
 
@@ -224,41 +227,43 @@ vm_handle_wp (struct page *page UNUSED) {
 bool
 vm_try_handle_fault (struct intr_frame *f UNUSED, void *addr UNUSED,
 		bool user UNUSED, bool write UNUSED, bool not_present UNUSED) {
+			
 	struct supplemental_page_table *spt UNUSED = &thread_current ()->spt;
 	struct page *page = NULL;
 	/* TODO: Validate the fault */
+	/* True: access by user, false: access by kernel. */
 
-	// 권한위반 체크 - 접근방식이 허용되지 않음
-	if(!not_present){
-		return false; // 위반! vm_try_handle_faule를 호출한 함수에서 process kill해줄 예정
-	}
-
-	// 1. 유저영역에 해당하는 주소인가(유저 스택 영역보다 넘지는 않는가?)?
-	// 2. adrr가 NULL은 아닌가?
-	if(!is_user_vaddr(addr) || addr == NULL){ // 주소 유효성 검사
+	// not_present == true는 “페이지가 현재 메모리에 없어서 fault”
+	// not_present == false는 "페이지는 존재하는데, 접근 방식이 잘못돼서 나는 fault"
+	if (!is_user_vaddr(addr) || addr == NULL) {
 		return false;
 	}
 
-	page = spt_find_page(spt, addr);
-	if(page == NULL){ //  spt에 페이지가 없는 경우 = crash거나 stack_growth 후보
+	// 프레임 있음
+	if (!not_present) {
+		return false;
+	}
+	// 프레임 없음
+	else {
+		page = spt_find_page(spt, addr);
+		if (page == NULL) {
+			// 현재 폴트 주소 영역이 유저니? 커널이니?
+			// 커널이면 스레드의 유저 스택을 사용해
+			uintptr_t *user_rsp = user ? f->rsp : thread_current()->user_rsp;
 
-		// Allocate additional pages only if they "appear" to be stack accesses.
-		if( (thread_current()->user_rsp > addr) && // 현재 스택에서 아래로 자라려는 접근인가? // 이따가 user_rsp에 값 넣어주러 가야함쓰~
-			(addr > (USER_STACK - ONE_MB))  ){ // 지금 확장하려는 주소가 하한선 아래로 벗어나지는 않는가?
+			// 현재 폴트 주소가 유저 스택 영역이 맞니?
+			if( (addr < USER_STACK) && // 폴트 주소가 스택 시작 주소에서 아래인가?
+				(addr >= (USER_STACK - ONE_MB)) && // 폴트 주소가 스택 끝 주소에서 위인가?
+				(addr >= user_rsp - 8) ) { // 폴트 주소가 스택 주소 근처인가?
 
-			vm_stack_growth(addr);
-			return true;
-
-		} else{
+				vm_stack_growth(addr);
+				return true;
+			}
 			return false;
 		}
-
-	} else { // spt에 page가 있음!
-		// 페이지 관련 권한위반 체크 - 쓰기를 시도했는데, 읽기 전용 페이지인 경우
-		if(write && !page->writable){ 
+		if( (write && !page->writable)){ 
 			return false;
 		}
-		
 		return vm_do_claim_page (page);
 	}
 }

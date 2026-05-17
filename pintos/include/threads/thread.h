@@ -145,6 +145,7 @@ struct thread {
 	 */
 	struct supplemental_page_table spt;
 	uintptr_t *user_rsp;
+	void *stack_bottom;
 
 #endif
 	struct intr_frame tf; // 문맥 전환에 필요한 레지스터 문맥
