@@ -212,10 +212,33 @@ vm_get_frame (void) {
 /* Growing the stack. */
 static void
 vm_stack_growth (void *addr UNUSED) {
-	// 현재 폴트난 주소가 과거 유저 스택에 할당한 주소 기준 
-	// 얼마나 멀리 내려와 있나요?
-	// 내려온 페이지 크기 만큼 순회하며 할당해주세요
-	vm_claim_page(pg_round_down(addr));
+	struct thread *current = thread_current ();
+	struct supplemental_page_table *spt;
+	char *current_stack_bottom;
+	char *fault_page;
+
+	RETURN_IF(current == NULL || current->stack_bottom == NULL);
+
+	spt = &current->spt;
+	current_stack_bottom = current->stack_bottom;
+	fault_page = pg_round_down (addr);
+
+	while (fault_page < current_stack_bottom) {
+		struct page *stack_page;
+
+		current_stack_bottom -= PGSIZE;
+
+		RETURN_IF(!vm_alloc_page (VM_ANON | VM_MARKER_0, current_stack_bottom, true));
+
+		if (!vm_claim_page (current_stack_bottom)) {
+			stack_page = spt_find_page (spt, current_stack_bottom);
+			if (stack_page != NULL)
+				spt_remove_page (spt, stack_page);
+			return;
+		}
+
+		current->stack_bottom = current_stack_bottom;
+	}
 }
 
 /* Handle the fault on write_protected page */
@@ -234,10 +257,8 @@ vm_try_handle_fault (struct intr_frame *f UNUSED, void *addr UNUSED,
 	/* True: access by user, false: access by kernel. */
 
 	// not_present == true는 “페이지가 현재 메모리에 없어서 fault”
-	// not_present == false는 "페이지는 존재하는데, 접근 방식이 잘못돼서 나는 fault"
-	if (!is_user_vaddr(addr) || addr == NULL) {
-		return false;
-	}
+	// not_present == false는 "페이지는 존재하는데, 접근 
+	RETURN_VALUE_IF(!is_user_vaddr(addr) || addr == NULL, false);
 
 	// 프레임 있음
 	if (!not_present) {
@@ -250,7 +271,7 @@ vm_try_handle_fault (struct intr_frame *f UNUSED, void *addr UNUSED,
 			// 현재 폴트 주소 영역이 유저니? 커널이니?
 			// 커널이면 스레드의 유저 스택을 사용해
 			uintptr_t *user_rsp = user ? f->rsp : thread_current()->user_rsp;
-
+			
 			// 현재 폴트 주소가 유저 스택 영역이 맞니?
 			if( (addr < USER_STACK) && // 폴트 주소가 스택 시작 주소에서 아래인가?
 				(addr >= (USER_STACK - ONE_MB)) && // 폴트 주소가 스택 끝 주소에서 위인가?
