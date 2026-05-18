@@ -208,25 +208,60 @@ vm_get_frame (void) {
 }
 
 /* Growing the stack. */
-static void
-vm_stack_growth (void *addr UNUSED) {
+static bool
+vm_stack_growth (void *addr) {
+	if (addr == NULL || is_kernel_vaddr (addr))
+		return false;
+
+	void *upage = pg_round_down (addr);
+	uint8_t *stack_limit = (uint8_t *) USER_STACK - (1 << 20);
+
+	if ((uint8_t *) upage < stack_limit || (uint8_t *) upage >= (uint8_t *) USER_STACK)
+		return false;
+
+	if (!vm_alloc_page (VM_ANON | VM_MARKER_0, upage, true))
+		return false;
+
+	return vm_claim_page (upage);
 }
 
 /* Handle the fault on write_protected page */
 static bool
 vm_handle_wp (struct page *page UNUSED) {
+	return false;
 }
 
 /* Return true on success */
 bool
-vm_try_handle_fault (struct intr_frame *f UNUSED, void *addr UNUSED,
-		bool user UNUSED, bool write UNUSED, bool not_present UNUSED) {
-	struct supplemental_page_table *spt UNUSED = &thread_current ()->spt;
+vm_try_handle_fault (struct intr_frame *f, void *addr,
+		bool user, bool write, bool not_present) {
+	struct supplemental_page_table *spt = &thread_current ()->spt;
 	struct page *page = NULL;
 	/* TODO: Validate the fault */
 	/* TODO: Your code goes here */
 
-	return vm_do_claim_page (page);
+	if (addr == NULL || is_kernel_vaddr (addr))
+		return false;
+
+	if (!not_present)
+		return vm_handle_wp (page);
+
+	page = spt_find_page (spt, addr);
+	if (page != NULL) {
+		if (write && !page->writable)
+			return false;
+
+		return vm_claim_page (page->va);
+	}
+
+	void *rsp = user ? (void *) f->rsp : thread_current ()->user_rsp;
+	if (rsp == NULL)
+		return false;
+
+	if ((uint8_t *) addr < (uint8_t *) rsp - 8)
+		return false;
+
+	return vm_stack_growth (addr);
 }
 
 /* Free the page.

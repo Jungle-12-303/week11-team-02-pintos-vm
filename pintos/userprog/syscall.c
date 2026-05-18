@@ -92,6 +92,10 @@ syscall_init (void) {
  */
 void
 syscall_handler (struct intr_frame *f UNUSED) {
+#ifdef VM
+	thread_current ()->user_rsp = (void *) f->rsp;
+#endif
+
 	switch (f->R.rax) {
 	case SYS_HALT:
 		halt ();
