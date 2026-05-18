@@ -351,8 +351,28 @@ supplemental_page_table_init (struct supplemental_page_table *spt) {
 
 /* Copy supplemental page table from src to dst */
 bool
-supplemental_page_table_copy (struct supplemental_page_table *dst UNUSED,
-		struct supplemental_page_table *src UNUSED) {
+supplemental_page_table_copy (struct supplemental_page_table *dst,
+		struct supplemental_page_table *src) {
+			if(src == NULL || &src->hash_table == NULL){
+				return false;
+			}
+			
+			supplemental_page_table_init(dst);
+			dst->hash_table.elem_cnt = src->hash_table.elem_cnt;
+			dst->hash_table.bucket_cnt = src->hash_table.bucket_cnt;
+			dst->hash_table.aux = src->hash_table.aux;
+
+			for (int i = 0; i < src->hash_table.bucket_cnt; i++){
+				struct list_elem *curr = &src->hash_table.buckets[i].head;
+				struct list_elem *copy = &dst->hash_table.buckets[i].head;
+
+				while(curr != NULL){
+					copy = curr;
+
+					curr = curr->next;
+					copy = copy->next;
+				}
+			}
 }
 
 /* Free the resource hold by the supplemental page table */
