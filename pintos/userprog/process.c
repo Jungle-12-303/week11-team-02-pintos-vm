@@ -410,7 +410,9 @@ process_exec (void *f_name) {
 	 * 먼저 현재 문맥을 제거한다.
 	 */
 	process_cleanup ();
-
+#ifdef VM
+	supplemental_page_table_init (&curr->spt);
+#endif
 	ASSERT (curr->fd_table != NULL);
 
 	/*
@@ -1196,6 +1198,13 @@ install_page (void *upage, void *kpage, bool writable) {
  * project 2만을 위한 함수를 구현하려면 위쪽 블록에 구현하라.
  */
 
+struct segment_load_aux {
+	struct file *file;
+	off_t ofs;
+	uint32_t read_bytes;
+	uint32_t zero_bytes;
+};
+
 static bool
 lazy_load_segment (struct page *page, void *aux) {
 	/*
@@ -1207,6 +1216,27 @@ lazy_load_segment (struct page *page, void *aux) {
 	/*
 	 * TODO: 이 함수를 호출할 때 VA를 사용할 수 있다.
 	 */
+	if (aux == NULL)
+		return false;
+
+	struct segment_load_aux *load_aux = aux;
+	bool success = false;
+
+	if (page != NULL && page->frame != NULL && page->frame->kva != NULL) {
+		uint8_t *kva = page->frame->kva;
+		off_t read_bytes = file_read_at (load_aux->file, kva,
+		                                  load_aux->read_bytes,
+		                                  load_aux->ofs);
+
+		if (read_bytes == (off_t) load_aux->read_bytes) {
+			memset (kva + load_aux->read_bytes, 0, load_aux->zero_bytes);
+			success = true;
+		}
+	}
+
+	file_close (load_aux->file);
+	free (load_aux);
+	return success;
 }
 
 /*
@@ -1243,10 +1273,26 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
 		/*
 		 * TODO: lazy_load_segment에 정보를 전달할 aux를 설정하라.
 		 */
-		void *aux = NULL;
-		if (!vm_alloc_page_with_initializer (VM_ANON, upage, writable,
-		                                     lazy_load_segment, aux))
+		struct segment_load_aux *aux = malloc (sizeof *aux);
+		if (aux == NULL)
 			return false;
+
+		aux->file = file_reopen (file);
+		aux->ofs = ofs;
+		aux->read_bytes = page_read_bytes;
+		aux->zero_bytes = page_zero_bytes;
+
+		if (aux->file == NULL) {
+			free (aux);
+			return false;
+		}
+
+		if (!vm_alloc_page_with_initializer (VM_ANON, upage, writable,
+		                                     lazy_load_segment, aux)) {
+			file_close (aux->file);
+			free (aux);
+			return false;
+		}
 
 		/*
 		 * 다음 페이지로 진행한다.
@@ -1254,6 +1300,7 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
 		read_bytes -= page_read_bytes;
 		zero_bytes -= page_zero_bytes;
 		upage += PGSIZE;
+		ofs += page_read_bytes;
 	}
 	return true;
 }
@@ -1265,16 +1312,32 @@ static bool
 setup_stack (struct intr_frame *if_) {
 	bool success = false;
 	void *stack_bottom = (void *) (((uint8_t *) USER_STACK) - PGSIZE);
+	thread_current()->stack_bottom = stack_bottom;
 
 	/*
-	 * TODO: stack_bottom에 스택을 매핑하고 페이지를 즉시 claim하라.
-	 * TODO: 성공하면 그에 맞게 rsp를 설정하라.
-	 * TODO: 해당 페이지를 스택 페이지로 표시해야 한다.
-	 */
-	/*
-	 * TODO: 여기에 코드를 작성하라.
+	 *  stack_bottom에 스택을 매핑하고 페이지를 즉시 claim하라.
+	 *  성공하면 그에 맞게 rsp를 설정하라.
+	 *  해당 페이지를 스택 페이지로 표시해야 한다.
 	 */
 
+	/**
+	 * vm_alloc_page()는 유저 가상주소 하나에 대응되는 VM 페이지를 등록하는 용도
+	 * 
+	 * vm_alloc_page(...)를 호출하면
+	 * 실제로는 vm_alloc_page_with_initializer((type), (upage), (writable), NULL, NULL) 호출
+	 * 
+	 * => 모든 페이지가 lazy initializer를 필요로 하지는 않음
+	 *	  (스택용 anon 페이지 == VM_ANON, 그냥 0으로 시작하는 일반 anon 페이지 == VM_MARKER_0)
+	 * => 타입은 VM_ANON, 추가 initializer는 없음, aux도 없음
+	 */
+	
+	// stack은 쓰기 기능이기 때문에 true값을 넘겨줌
+	if(vm_alloc_page((VM_ANON | VM_MARKER_0), stack_bottom, true)){
+		if(vm_claim_page(stack_bottom)){
+			if_->rsp  = USER_STACK;
+			success = true;
+		} 
+	}
 	return success;
 }
 #endif /* VM */

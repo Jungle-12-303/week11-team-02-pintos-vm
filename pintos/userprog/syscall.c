@@ -19,6 +19,7 @@
 #include "filesys/file.h"
 #include "devices/input.h"
 #include "lib/string.h"
+#include "vm/vm.h"
 
 void syscall_entry (void);
 void syscall_handler (struct intr_frame *);
@@ -39,7 +40,7 @@ void seek (int fd, unsigned position);
 unsigned tell (int fd);
 int filesize (int fd);
 void check_address (const void *addr);
-static void check_user_buffer (const void *buffer, unsigned size);
+static void check_user_buffer (const void *buffer, unsigned size, bool writeOnUser);
 static void check_user_string (const char *str);
 
 /* 추가 변수들 */
@@ -92,6 +93,10 @@ syscall_init (void) {
  */
 void
 syscall_handler (struct intr_frame *f UNUSED) {
+	#ifdef VM
+	thread_current()->user_rsp = f->rsp;
+	#endif
+	
 	switch (f->R.rax) {
 	case SYS_HALT:
 		halt ();
@@ -193,7 +198,7 @@ write (int fd, const void *buffer, unsigned size) {
 	struct file *file;
 
 	/* 유효성 검사 로직 */
-	check_user_buffer (buffer, size);
+	check_user_buffer (buffer, size, false);
 
 	/* 락 획득: 동시에 읽어서 꼬임 방지*/
 	lock_acquire (&filesys_lock);
@@ -263,7 +268,7 @@ read (int fd, void *buffer, unsigned size) {
 	uint8_t *buf = (uint8_t *) buffer;
 	struct file *f;
 
-	check_user_buffer (buffer, size);
+	check_user_buffer (buffer, size, true);
 
 	lock_acquire (&filesys_lock);
 
@@ -354,16 +359,17 @@ check_address (const void *addr) {
 	if (!is_user_vaddr (addr)) {
 		exit (-1);
 	}
-
+#ifndef VM
 	/* 현재 프로세스의 페이지 테이블에서 addr가 실제 물리 메모리에 매핑되어 있는지 확인하고,
 	없으면 프로세스를 종료한다. */
 	if (pml4_get_page (curr->pml4, addr) == NULL) {
 		exit (-1);
 	}
+#endif
 }
 
 static void
-check_user_buffer (const void *buffer, unsigned size) {
+check_user_buffer (const void *buffer, unsigned size, bool writeOnUser) {
 	const char *addr = buffer;
 	uintptr_t start;
 	uintptr_t end;
@@ -376,8 +382,15 @@ check_user_buffer (const void *buffer, unsigned size) {
 
 	start = (uintptr_t) pg_round_down (addr);
 	end = (uintptr_t) pg_round_down (addr + size - 1);
-	for (; start <= end; start += PGSIZE)
+	for (; start <= end; start += PGSIZE) {
 		check_address ((const void *) start);
+
+		if (writeOnUser) {
+			struct page *page = spt_find_page(&thread_current()->spt, (void *)start);
+			if (page == NULL || !page->writable)
+				exit(-1);
+		}
+	}
 }
 
 static void
