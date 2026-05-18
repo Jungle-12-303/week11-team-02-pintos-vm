@@ -1196,6 +1196,13 @@ install_page (void *upage, void *kpage, bool writable) {
  * project 2만을 위한 함수를 구현하려면 위쪽 블록에 구현하라.
  */
 
+struct segment_load_aux {
+	struct file *file;
+	off_t ofs;
+	uint32_t read_bytes;
+	uint32_t zero_bytes;
+};
+
 static bool
 lazy_load_segment (struct page *page, void *aux) {
 	/*
@@ -1207,6 +1214,27 @@ lazy_load_segment (struct page *page, void *aux) {
 	/*
 	 * TODO: 이 함수를 호출할 때 VA를 사용할 수 있다.
 	 */
+	if (aux == NULL)
+		return false;
+
+	struct segment_load_aux *load_aux = aux;
+	bool success = false;
+
+	if (page != NULL && page->frame != NULL && page->frame->kva != NULL) {
+		uint8_t *kva = page->frame->kva;
+		off_t read_bytes = file_read_at (load_aux->file, kva,
+		                                  load_aux->read_bytes,
+		                                  load_aux->ofs);
+
+		if (read_bytes == (off_t) load_aux->read_bytes) {
+			memset (kva + load_aux->read_bytes, 0, load_aux->zero_bytes);
+			success = true;
+		}
+	}
+
+	file_close (load_aux->file);
+	free (load_aux);
+	return success;
 }
 
 /*
@@ -1243,10 +1271,26 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
 		/*
 		 * TODO: lazy_load_segment에 정보를 전달할 aux를 설정하라.
 		 */
-		void *aux = NULL;
-		if (!vm_alloc_page_with_initializer (VM_ANON, upage, writable,
-		                                     lazy_load_segment, aux))
+		struct segment_load_aux *aux = malloc (sizeof *aux);
+		if (aux == NULL)
 			return false;
+
+		aux->file = file_reopen (file);
+		aux->ofs = ofs;
+		aux->read_bytes = page_read_bytes;
+		aux->zero_bytes = page_zero_bytes;
+
+		if (aux->file == NULL) {
+			free (aux);
+			return false;
+		}
+
+		if (!vm_alloc_page_with_initializer (VM_ANON, upage, writable,
+		                                     lazy_load_segment, aux)) {
+			file_close (aux->file);
+			free (aux);
+			return false;
+		}
 
 		/*
 		 * 다음 페이지로 진행한다.
@@ -1254,6 +1298,7 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
 		read_bytes -= page_read_bytes;
 		zero_bytes -= page_zero_bytes;
 		upage += PGSIZE;
+		ofs += page_read_bytes;
 	}
 	return true;
 }
