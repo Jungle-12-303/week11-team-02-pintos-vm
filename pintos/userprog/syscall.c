@@ -358,12 +358,13 @@ check_address (const void *addr) {
 	if (!is_user_vaddr (addr)) {
 		exit (-1);
 	}
-
+#ifndef VM
 	/* 현재 프로세스의 페이지 테이블에서 addr가 실제 물리 메모리에 매핑되어 있는지 확인하고,
 	없으면 프로세스를 종료한다. */
 	if (pml4_get_page (curr->pml4, addr) == NULL) {
 		exit (-1);
 	}
+#endif
 }
 
 static void

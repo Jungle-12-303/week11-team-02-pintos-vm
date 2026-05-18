@@ -276,7 +276,7 @@ vm_try_handle_fault (struct intr_frame *f UNUSED, void *addr UNUSED,
 			// 현재 폴트 주소가 유저 스택 영역이 맞니?
 			if( (addr < USER_STACK) && // 폴트 주소가 스택 시작 주소에서 아래인가?
 				(addr >= (USER_STACK - ONE_MB)) && // 폴트 주소가 스택 끝 주소에서 위인가?
-				(addr >= (char*)user_rsp - 8) ) { // 폴트 주소가 스택 주소 근처인가?
+				(addr >= (uintptr_t*)user_rsp - 8) ) { // 폴트 주소가 스택 주소 근처인가?
 
 				vm_stack_growth(addr);
 				return true;
