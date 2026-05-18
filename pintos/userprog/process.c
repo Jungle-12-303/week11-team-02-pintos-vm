@@ -410,8 +410,10 @@ process_exec (void *f_name) {
 	 * 먼저 현재 문맥을 제거한다.
 	 */
 	process_cleanup ();
-
+#ifdef VM
 	supplemental_page_table_init (&curr->spt);
+#endif
+	ASSERT (curr->fd_table != NULL);
 
 	/*
 	 * 그리고 바이너리를 로드한다.
