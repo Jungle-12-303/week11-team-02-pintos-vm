@@ -211,21 +211,27 @@ vm_get_frame (void) {
 static bool
 vm_stack_growth (void *addr) {
 
-	// fault addr를 페이지 시작 주소로 내린다
-	//그 주소에 anoymous page를 할당한다
-	//그 page를 SPT에 넣는다
-	// 그 page를 claim해서 실제 frame을 붙인다
-	// page table에 VA->frame 매핑이 생긴다
-
+	struct supplemental_page_table *spt = &thread_current ()->spt;
+	
+	// addr을 가상페이지의 첫주소로 변경
+	void *upage = pg_round_down(addr);
 	//페이지 등록, spt에 넣는다
-	if(!vm_alloc_page_with_initializer(VM_ANON, pg_round_down(addr), true, NULL, NULL))
+	if(!vm_alloc_page_with_initializer(VM_ANON | VM_MARKER_0, upage, true, NULL, NULL))
 	{
 		return false;
 	}
 
 	//frame 할당 받아서 페이지 테이블에 매핑한다
-	if(!vm_claim_page(pg_round_down(addr)))
+	if(!vm_claim_page(upage))
 	{
+		struct page *page = spt_find_page(spt, upage);
+
+		if(page == NULL)
+		{
+			return false;
+		}
+
+		spt_remove_page(spt, page);
 		return false;
 	}
 
@@ -243,7 +249,6 @@ vm_try_handle_fault (struct intr_frame *f, void *addr,
 		bool user, bool write, bool not_present) {
 	struct supplemental_page_table *spt = &thread_current ()->spt;
 	struct page *page = NULL;
-	void *rsp = NULL;
 	/* TODO: Validate the fault */
 	/* TODO: Your code goes here */
 	
@@ -255,6 +260,8 @@ vm_try_handle_fault (struct intr_frame *f, void *addr,
 		return false;
 	}
 
+	//user 모드 페이지 폴트시, 커널 모드 페이지 폴트 시
+	uintptr_t rsp_stack = user ? f->rsp : thread_current()->rsp_stack;
 	// 여기서부터 권한 위반은 아니다
 
 	page = spt_find_page(spt, addr);
@@ -262,19 +269,9 @@ vm_try_handle_fault (struct intr_frame *f, void *addr,
 	// spt에 페이지가 없다면
 	if(page == NULL)
 	{
-		// 유저 모드에서 fault 발생
-		if(user)
-		{
-			rsp = f->rsp;
-		}
-		// 커널 모드에서 fault 발생
-		else
-		{
-			rsp  = thread_current()->tf.rsp;
-		}
 
 		// addr이 스택 성장 가능한 주소인지 검사
-		if(addr < USER_STACK && addr >= rsp - 8 && addr >= USER_STACK - 1024 * 1024)
+		if((uintptr_t)addr < USER_STACK && (uintptr_t)addr >= f->rsp - 8 && (uintptr_t)addr >= USER_STACK - 1024 * 1024)
 		{
 			// 스택 크기 키워라
 			if(!vm_stack_growth(addr))
