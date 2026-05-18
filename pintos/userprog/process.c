@@ -1310,16 +1310,32 @@ static bool
 setup_stack (struct intr_frame *if_) {
 	bool success = false;
 	void *stack_bottom = (void *) (((uint8_t *) USER_STACK) - PGSIZE);
+	thread_current()->stack_bottom = stack_bottom;
 
 	/*
-	 * TODO: stack_bottom에 스택을 매핑하고 페이지를 즉시 claim하라.
-	 * TODO: 성공하면 그에 맞게 rsp를 설정하라.
-	 * TODO: 해당 페이지를 스택 페이지로 표시해야 한다.
-	 */
-	/*
-	 * TODO: 여기에 코드를 작성하라.
+	 *  stack_bottom에 스택을 매핑하고 페이지를 즉시 claim하라.
+	 *  성공하면 그에 맞게 rsp를 설정하라.
+	 *  해당 페이지를 스택 페이지로 표시해야 한다.
 	 */
 
+	/**
+	 * vm_alloc_page()는 유저 가상주소 하나에 대응되는 VM 페이지를 등록하는 용도
+	 * 
+	 * vm_alloc_page(...)를 호출하면
+	 * 실제로는 vm_alloc_page_with_initializer((type), (upage), (writable), NULL, NULL) 호출
+	 * 
+	 * => 모든 페이지가 lazy initializer를 필요로 하지는 않음
+	 *	  (스택용 anon 페이지 == VM_ANON, 그냥 0으로 시작하는 일반 anon 페이지 == VM_MARKER_0)
+	 * => 타입은 VM_ANON, 추가 initializer는 없음, aux도 없음
+	 */
+	
+	// stack은 쓰기 기능이기 때문에 true값을 넘겨줌
+	if(vm_alloc_page((VM_ANON | VM_MARKER_0), stack_bottom, true)){
+		if(vm_claim_page(stack_bottom)){
+			if_->rsp  = USER_STACK;
+			success = true;
+		} 
+	}
 	return success;
 }
 #endif /* VM */

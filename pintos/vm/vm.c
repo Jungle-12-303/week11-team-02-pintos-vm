@@ -10,6 +10,8 @@
 #include "threads/mmu.h"
 #include "threads/init.h"
 
+#define ONE_MB (1 << 20) // 1MB
+
 static struct list frame_table;
 static struct lock frame_table_lock;
 
@@ -210,6 +212,33 @@ vm_get_frame (void) {
 /* Growing the stack. */
 static void
 vm_stack_growth (void *addr UNUSED) {
+	struct thread *current = thread_current ();
+	struct supplemental_page_table *spt;
+	char *current_stack_bottom;
+	char *fault_page;
+
+	RETURN_IF(current == NULL || current->stack_bottom == NULL);
+
+	spt = &current->spt;
+	current_stack_bottom = current->stack_bottom;
+	fault_page = pg_round_down (addr);
+
+	while (fault_page < current_stack_bottom) {
+		struct page *stack_page;
+
+		current_stack_bottom -= PGSIZE;
+
+		RETURN_IF(!vm_alloc_page (VM_ANON | VM_MARKER_0, current_stack_bottom, true));
+
+		if (!vm_claim_page (current_stack_bottom)) {
+			stack_page = spt_find_page (spt, current_stack_bottom);
+			if (stack_page != NULL)
+				spt_remove_page (spt, stack_page);
+			return;
+		}
+
+		current->stack_bottom = current_stack_bottom;
+	}
 }
 
 /* Handle the fault on write_protected page */
@@ -221,12 +250,43 @@ vm_handle_wp (struct page *page UNUSED) {
 bool
 vm_try_handle_fault (struct intr_frame *f UNUSED, void *addr UNUSED,
 		bool user UNUSED, bool write UNUSED, bool not_present UNUSED) {
+			
 	struct supplemental_page_table *spt UNUSED = &thread_current ()->spt;
 	struct page *page = NULL;
 	/* TODO: Validate the fault */
-	/* TODO: Your code goes here */
+	/* True: access by user, false: access by kernel. */
 
-	return vm_do_claim_page (page);
+	// not_present == true는 “페이지가 현재 메모리에 없어서 fault”
+	// not_present == false는 "페이지는 존재하는데, 접근 
+	RETURN_VALUE_IF(!is_user_vaddr(addr) || addr == NULL, false);
+
+	// 프레임 있음
+	if (!not_present) {
+		return false;
+	}
+	// 프레임 없음
+	else {
+		page = spt_find_page(spt, addr);
+		if (page == NULL) {
+			// 현재 폴트 주소 영역이 유저니? 커널이니?
+			// 커널이면 스레드의 유저 스택을 사용해
+			uintptr_t *user_rsp = user ? f->rsp : thread_current()->user_rsp;
+			
+			// 현재 폴트 주소가 유저 스택 영역이 맞니?
+			if( (addr < USER_STACK) && // 폴트 주소가 스택 시작 주소에서 아래인가?
+				(addr >= (USER_STACK - ONE_MB)) && // 폴트 주소가 스택 끝 주소에서 위인가?
+				(addr >= (char*)user_rsp - 8) ) { // 폴트 주소가 스택 주소 근처인가?
+
+				vm_stack_growth(addr);
+				return true;
+			}
+			return false;
+		}
+		if( (write && !page->writable)){ 
+			return false;
+		}
+		return vm_do_claim_page (page);
+	}
 }
 
 /* Free the page.
