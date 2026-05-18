@@ -211,11 +211,16 @@ vm_get_frame (void) {
 }
 
 /* Growing the stack. */
-static void
-vm_stack_growth (void *addr,uintptr_t rsp, bool write) {
+static bool
+vm_stack_growth (void *addr, bool write) {
 	void *dst = pg_round_down(addr);
-	vm_alloc_page(VM_ANON|VM_MARKER_0, dst ,write);
-	vm_claim_page(dst);
+	if(!vm_alloc_page(VM_ANON|VM_MARKER_0, dst ,write)){
+		return false;
+	}
+	if(!vm_claim_page(dst)){
+		return false;
+	}
+	return true;
 }
 
 /* Handle the fault on write_protected page */
@@ -252,14 +257,22 @@ vm_try_handle_fault (struct intr_frame *f, void *addr,
 			return false;
 		}
 
-		vm_stack_growth(addr, rsp, write);
+		if(!vm_stack_growth(addr, write)){
+			return false;
+		}
 
 		page = spt_find_page(spt,addr);
 		// 실제로 처리 되었는 지
-		if(page->frame != NULL){
-			return true;
+		if(page == NULL || page->frame == NULL){
+			return false;
 		}
+		return true;
 	}
+
+	if (page->frame != NULL){
+		return true;
+	}
+	
 	return vm_do_claim_page (page);
 }
 
