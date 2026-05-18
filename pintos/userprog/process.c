@@ -1310,6 +1310,7 @@ static bool
 setup_stack (struct intr_frame *if_) {
 	bool success = false;
 	void *stack_bottom = (void *) (((uint8_t *) USER_STACK) - PGSIZE);
+	thread_current()->stack_bottom = stack_bottom;
 
 	/*
 	 *  stack_bottom에 스택을 매핑하고 페이지를 즉시 claim하라.
