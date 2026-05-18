@@ -411,7 +411,7 @@ process_exec (void *f_name) {
 	 */
 	process_cleanup ();
 
-	ASSERT (curr->fd_table != NULL);
+	supplemental_page_table_init (&curr->spt);
 
 	/*
 	 * 그리고 바이너리를 로드한다.
