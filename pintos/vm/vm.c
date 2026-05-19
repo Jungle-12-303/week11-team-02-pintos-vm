@@ -395,8 +395,8 @@ supplemental_page_table_copy (struct supplemental_page_table *dst, struct supple
 			case VM_FILE:
 				return false;
 		}
-		return true;
 	}
+	return true;
 }
 
 static void
@@ -415,13 +415,7 @@ supplemental_page_table_kill (struct supplemental_page_table *spt) {
 		return;
 	}
 
-	struct hash_iterator i;
-    hash_first (&i, &spt->hash_table);
-
-	while (hash_next (&i)){
-		struct page *page = hash_entry (hash_cur (&i), struct page, hash_elem);
-		hash_destroy(&spt->hash_table, spt_destructor);
-	}
+	hash_destroy(&spt->hash_table, spt_destructor);
 }
 
 
