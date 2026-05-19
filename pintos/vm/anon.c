@@ -4,6 +4,7 @@
 #include "devices/disk.h"
 #include "lib/kernel/bitmap.h"
 #include "threads/vaddr.h"
+#include "lib/string.h"
 
 /* DO NOT MODIFY BELOW LINE */
 static struct disk *swap_disk;
@@ -63,24 +64,44 @@ anon_initializer (struct page *page, enum vm_type type, void *kva) {
 // TODO: [5]
 static bool
 anon_swap_in (struct page *page, void *kva) {
+
+	if (page == NULL || kva == NULL){
+		return false;
+	}
+	
 	struct anon_page *anon_page = &page->anon;
 	size_t sector_per_page = (PGSIZE / DISK_SECTOR_SIZE); // 하나의 페이지가 가지는 섹터의 수
 
-	//1. page크기만큼의 정보가 필요하니까 그 만큼 반복해줘야 함.
-	for(int i = 0; i < sector_per_page; i++){
+	lock_acquire(&swap_lock);
+
+	if(anon_page->swap_status){
+
+		if(swap_bitmap == NULL || swap_disk == NULL || anon_page->swap_slot == -1){
+			lock_release(&swap_lock);
+			return false;
+		}
+
+		//1. page크기만큼의 정보가 필요하니까 그 만큼 반복해줘야 함.
+		for(int i = 0; i < sector_per_page; i++){
+			
+			// 디스크의 내용을 kva에 넣음.
+			
+			// 디스크 내에서 읽어야하는 범위는 
+			// 시작: page의 slot * 하나의 페이지가 가지는 섹터 수 
+			// 끝: page의 slot * 하나의 페이지가 가지는 섹터 수 + 하나의 페이지가 가지는 섹터 수 - 1 
+			disk_read(swap_disk, anon_page->swap_slot * sector_per_page + i, (char*)kva + DISK_SECTOR_SIZE * i);
+			
+		}
+		bitmap_set(swap_bitmap, anon_page->swap_slot, 0);
 		
-		// 디스크의 내용을 kva에 넣음.
-		
-		// 디스크 내에서 읽어야하는 범위는 
-		// 시작: page의 slot * 하나의 페이지가 가지는 섹터 수 
-		// 끝: page의 slot * 하나의 페이지가 가지는 섹터 수 + 하나의 페이지가 가지는 섹터 수 - 1 
-		disk_read(swap_disk, anon_page->swap_slot * sector_per_page + i, kva + DISK_SECTOR_SIZE * i);
-		
+		anon_page->swap_status = false;
+		anon_page->swap_slot = -1;
+	}else {
+		// 어디에, 어떤 값으로, 얼만큼 채울 것인가
+		memset(kva, 0, PGSIZE);
 	}
-	bitmap_set(swap_bitmap, anon_page->swap_slot, 0);
-	
-	anon_page->swap_status = false;
-	anon_page->swap_slot = -1;
+
+	lock_release(&swap_lock);
 
 	return true;
 }
