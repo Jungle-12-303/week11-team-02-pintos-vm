@@ -168,7 +168,10 @@ vm_get_victim (void) {
 	lock_acquire(&frame_table_lock);
 	// list_front를 했는데, frame_table에 아무것도 없으면 os가 다운됨. 
 	// => frambe_table이 비어있는지 먼저 확인
-	RETURN_VALUE_IF(list_empty(&frame_table) == true, NULL);
+	if(list_empty(&frame_table) == true){
+		lock_release(&frame_table_lock);
+		return NULL;
+	}
 
 	struct list_elem *frame_front = list_front(&frame_table); // frame_table에서 첫번째 불러오기
 	victim = list_entry(frame_front, struct frame, elem);  // frame 형태로 변환
@@ -182,7 +185,7 @@ vm_get_victim (void) {
 // TODO: [1] 이거부터 해
 static struct frame *
 vm_evict_frame (void) {
-	struct frame *victim UNUSED = vm_get_victim ();
+	struct frame *victim = vm_get_victim ();
 	/* TODO: swap out the victim and return the evicted frame. */
 	// 프레임를 하나 가져온다
 	struct frame* frame = vm_get_frame();
