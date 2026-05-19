@@ -52,16 +52,37 @@ anon_initializer (struct page *page, enum vm_type type, void *kva) {
 	page->operations = &anon_ops;	
 	page->anon.type = type;
 	page->anon.swap_status = false;
-	page->anon.swap_slot = -1;
+	// 이 페이지는 스왑 슬롯을 보유 X == 아직 swap disk에 내려간 적 X
+	page->anon.swap_slot = -1; // -1 : “유효한 슬롯 없음”을 나타내는 특별한 값
 
 	return true;
 }
 
 /* Swap in the page by read contents from the swap disk. */
+// 디스크 -> 메모리
 // TODO: [5]
 static bool
 anon_swap_in (struct page *page, void *kva) {
 	struct anon_page *anon_page = &page->anon;
+	size_t sector_per_page = (PGSIZE / DISK_SECTOR_SIZE); // 하나의 페이지가 가지는 섹터의 수
+
+	//1. page크기만큼의 정보가 필요하니까 그 만큼 반복해줘야 함.
+	for(int i = 0; i < sector_per_page; i++){
+		
+		// 디스크의 내용을 kva에 넣음.
+		
+		// 디스크 내에서 읽어야하는 범위는 
+		// 시작: page의 slot * 하나의 페이지가 가지는 섹터 수 
+		// 끝: page의 slot * 하나의 페이지가 가지는 섹터 수 + 하나의 페이지가 가지는 섹터 수 - 1 
+		disk_read(swap_disk, anon_page->swap_slot * sector_per_page + i, kva + DISK_SECTOR_SIZE * i);
+		
+	}
+	bitmap_set(swap_bitmap, anon_page->swap_slot, 0);
+	
+	anon_page->swap_status = false;
+	anon_page->swap_slot = -1;
+
+	return true;
 }
 
 /* Swap out the page by writing contents to the swap disk. */
@@ -69,6 +90,23 @@ anon_swap_in (struct page *page, void *kva) {
 static bool
 anon_swap_out (struct page *page) {
 	struct anon_page *anon_page = &page->anon;
+	size_t sector_per_page = (PGSIZE / DISK_SECTOR_SIZE); // 하나의 페이지가 가지는 섹터의 수
+
+	// 디스크에서 비어있는 위치 찾기
+	size_t bitmap_idx = bitmap_scan(swap_bitmap, 0, 1, 0);
+
+	for(int i = 0; i < sector_per_page; i++){
+		
+		// 메모리의 내용을 디스크에 넣어줌
+		disk_write(swap_disk, bitmap_idx * sector_per_page + i, page->frame->kva + DISK_SECTOR_SIZE * i);
+		
+	}
+	bitmap_set(swap_bitmap, anon_page->swap_slot, 1);
+	
+	anon_page->swap_status = true;
+	anon_page->swap_slot = bitmap_idx;
+
+	return true;
 }
 
 /* Destroy the anonymous page. PAGE will be freed by the caller. */
