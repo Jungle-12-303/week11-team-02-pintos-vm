@@ -375,8 +375,10 @@ supplemental_page_table_copy (struct supplemental_page_table *dst, struct supple
 				if (aux == NULL){
 					return false;
 				}
-				vm_alloc_page_with_initializer (type, page->va, page->writable,
-											page->uninit.init, aux);
+				if(!vm_alloc_page_with_initializer (type, page->va, page->writable,
+											page->uninit.init, aux)){
+												return true;
+											}
 				break;
 			case VM_ANON:
 				if(!vm_alloc_page(type, page->va, page->writable)){
@@ -393,7 +395,14 @@ supplemental_page_table_copy (struct supplemental_page_table *dst, struct supple
 			case VM_FILE:
 				return false;
 		}
+		return true;
 	}
+}
+
+static void
+spt_destructor (struct hash_elem *e, void *aux UNUSED){
+	struct page *page = hash_entry (e, struct page, hash_elem);
+	vm_dealloc_page (page);
 }
 
 /* Free the resource hold by the supplemental page table */
@@ -411,8 +420,7 @@ supplemental_page_table_kill (struct supplemental_page_table *spt) {
 
 	while (hash_next (&i)){
 		struct page *page = hash_entry (hash_cur (&i), struct page, hash_elem);
-
-		destroy(page);
+		hash_destroy(&spt->hash_table, spt_destructor);
 	}
 }
 

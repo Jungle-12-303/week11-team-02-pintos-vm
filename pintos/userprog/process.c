@@ -1198,13 +1198,6 @@ install_page (void *upage, void *kpage, bool writable) {
  * project 2만을 위한 함수를 구현하려면 위쪽 블록에 구현하라.
  */
 
-struct segment_load_aux {
-	struct file *file;
-	off_t ofs;
-	uint32_t read_bytes;
-	uint32_t zero_bytes;
-};
-
 static bool
 lazy_load_segment (struct page *page, void *aux) {
 	/*
@@ -1345,7 +1338,7 @@ struct segment_load_aux * copy_segment_load_aux (const struct segment_load_aux *
 	if (src == NULL){
 		return NULL;
 	}
-	struct segment_load_aux *aux = malloc(sizedof(*aux));
+	struct segment_load_aux *aux = malloc(sizeof(*aux));
 
 	if(aux == NULL){
 		return NULL;
