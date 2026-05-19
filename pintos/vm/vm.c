@@ -366,7 +366,7 @@ supplemental_page_table_copy (struct supplemental_page_table *dst, struct supple
 	while (hash_next (&i)){
 		struct page *page = hash_entry (hash_cur (&i), struct page, hash_elem);
 
-		enum vm_type type = page_get_type(page);
+		enum vm_type type = page->operations->type;
 
 		switch (VM_TYPE(type)){
 			case VM_UNINIT:
