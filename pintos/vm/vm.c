@@ -9,7 +9,7 @@
 #include "threads/synch.h"
 #include "threads/mmu.h"
 #include "threads/init.h"
-
+#include <string.h>
 #define ONE_MB (1 << 20) // 1MB
 
 static struct list frame_table;
@@ -350,9 +350,75 @@ supplemental_page_table_init (struct supplemental_page_table *spt) {
 }
 
 /* Copy supplemental page table from src to dst */
+// 부모가 가지고 있던 가상 메모리 구조를 자식도 똑같이 가지게 만든다
 bool
 supplemental_page_table_copy (struct supplemental_page_table *dst UNUSED,
 		struct supplemental_page_table *src UNUSED) {
+			//src는 부모 spt, dst는 자식 spt
+	struct hash_iterator i;
+	//i를 src의 hash_table에 대한 걸로 설정
+	hash_first(&i, &src->hash_table);
+	
+	// 비어있지 않은 bucket 찾아서 거기의 hash_elem 주고, 그 bucket의 hash_elem 있으면 계속 넘어간다.
+	while(hash_next(&i))
+	{
+		// found_elem을 통해서 page가 되고 싶음.
+		struct page* page = hash_entry(i.elem, struct page, hash_elem);
+
+		
+		switch(VM_TYPE(page->operations->type))
+		{
+			case VM_UNINIT:
+
+				//temp_aux에 원본 aux 복사
+				void* temp_aux = malloc(sizeof(page->uninit.aux));
+		
+				memcpy(temp_aux, page->uninit.aux, sizeof(page->uninit.aux));
+
+				// 현재 스레드가 자식 스레드여서 사용 가능
+				vm_alloc_page_with_initializer(page->uninit.type, page->va, page->writable, page->uninit.init, temp_aux);
+				
+				//UNINIT page여서 매핑은 안한다
+				
+				break;
+			case VM_ANON:
+
+				// 현재 스레드가 자식 스레드여서 사용 가능
+				vm_alloc_page(VM_ANON, page->va, page->writable);
+
+				if(page->frame)
+				{
+					//자식 스레드의 spt에 va를 가진 페이지가 있으면 물리 메모리에 매핑
+					vm_claim_page(page->va);
+				}
+
+				//자식 스레드의 spt에서 page를 찾는다.
+				struct page* child_page= spt_find_page(dst, page->va);
+
+				if(child_page == NULL)
+				{
+					return false;
+				}
+
+				memcpy(child_page->frame->kva, page->frame->kva, PGSIZE);
+				break;
+
+			case VM_FILE:
+				// struct file_page *file_page = &page->file;
+
+				// struct file_info* child_aux = malloc(sizeof *child_aux);
+
+				// vm_alloc_page(VM_FILE, page->va, page->writable);
+
+				// struct supplemental_page_table* cur = &thread_current()->spt;
+
+				
+				break;
+		}
+
+		
+
+	}
 }
 
 /* Free the resource hold by the supplemental page table */
