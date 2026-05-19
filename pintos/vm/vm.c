@@ -10,6 +10,7 @@
 #include "threads/mmu.h"
 #include "threads/init.h"
 #include "string.h"
+#include "userprog/process.h"
 
 #define ONE_MB (1 << 20) // 1MB
 
@@ -370,7 +371,7 @@ supplemental_page_table_copy (struct supplemental_page_table *dst, struct supple
 		switch (VM_TYPE(type)){
 			case VM_UNINIT:
 			// 메타 데이터만
-				struct segment_load_aux * aux = segment_load_aux(page->uninit.aux);
+				struct segment_load_aux * aux = copy_segment_load_aux(page->uninit.aux);
 				if (aux == NULL){
 					return false;
 				}
@@ -385,16 +386,13 @@ supplemental_page_table_copy (struct supplemental_page_table *dst, struct supple
 					return false;
 				}
 				struct page *new_page = spt_find_page(dst, page->va);
-				if (new_page->frame != NULL){
+				if (page->frame != NULL && new_page->frame != NULL){
 					memcpy(new_page->frame->kva, page->frame->kva, PGSIZE);
 				}
-				
 				break;
-
 			case VM_FILE:
-
+				return false;
 		}
-		spt_insert_page(dst,page);
 	}
 }
 
