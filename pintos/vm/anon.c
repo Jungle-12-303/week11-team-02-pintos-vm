@@ -126,6 +126,10 @@ anon_swap_out (struct page *page) {
 
 	// 디스크에서 비어있는 위치 찾기
 	size_t bitmap_idx = bitmap_scan(swap_bitmap, 0, 1, 0);
+	if(bitmap_idx == BITMAP_ERROR){
+		lock_release(&swap_lock);
+		return false;
+	}
 
 	for(int i = 0; i < sector_per_page; i++){
 		
@@ -133,7 +137,7 @@ anon_swap_out (struct page *page) {
 		disk_write(swap_disk, bitmap_idx * sector_per_page + i, page->frame->kva + DISK_SECTOR_SIZE * i);
 		
 	}
-	bitmap_set(swap_bitmap, anon_page->swap_slot, 1);
+	bitmap_set(swap_bitmap, bitmap_idx, 1);
 	
 	anon_page->swap_status = true;
 	anon_page->swap_slot = bitmap_idx;
