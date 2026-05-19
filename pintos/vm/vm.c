@@ -159,11 +159,10 @@ spt_remove_page (struct supplemental_page_table *spt, struct page *page) {
 }
 
 /* Get the struct frame, that will be evicted. */
-// TODO: [2] 다음 -> 함수 구현x 함수 위치 선정 O
 static struct frame *
 vm_get_victim (void) {
 	struct frame *victim = NULL;
-	/* TODO: The policy for eviction is up to you. */
+	/* The policy for eviction is up to you. */
 	
 	lock_acquire(&frame_table_lock);
 	// list_front를 했는데, frame_table에 아무것도 없으면 os가 다운됨. 
@@ -181,7 +180,7 @@ vm_get_victim (void) {
 		i--;
 		
 		struct list_elem *frame_front = list_pop_front(&frame_table);
-		list_push_back(&frame_table, victim);
+		list_push_back(&frame_table, frame_front);
 		
 		temp_frame = list_entry(frame_front, struct frame, elem);
 		if((temp_frame->owner == NULL) || (temp_frame->owner->pml4 == NULL) ||
@@ -210,7 +209,6 @@ vm_get_victim (void) {
 
 /* Evict one page and return the corresponding frame.
  * Return NULL on error.*/
-// TODO: [1] 이거부터 해
 static struct frame *
 vm_evict_frame (void) {
 	struct frame *victim = vm_get_victim ();
@@ -219,13 +217,13 @@ vm_evict_frame (void) {
 		return NULL;
 	}
 
-	/* TODO: swap out the victim and return the evicted frame. */
+	/* swap out the victim and return the evicted frame. */
 	if(!swap_out(victim->page)){
 		return NULL;
 	};
 
 	// 디스크에 수납하고 프레임을 비운다(맵핑된 물리 메모리만 남긴다)
-	if((victim->owner->pml4 == NULL) || (victim->page->va == NULL) ||
+	if((victim->owner == NULL) ||(victim->owner->pml4 == NULL) || (victim->page->va == NULL) ||
 			(victim->page->frame == NULL)){
 			
 		return NULL;
@@ -264,6 +262,7 @@ vm_get_frame (void) {
 	else {
 		//palloc success, initialize the frame struct.
 		frame->page = NULL;
+		frame->owner = NULL;
 		lock_acquire (&frame_table_lock);
 		list_push_back (&frame_table, &frame->elem);
 		lock_release (&frame_table_lock);
@@ -391,6 +390,7 @@ vm_do_claim_page (struct page *page) {
 	}
 	/* Set links */
 	frame->page = page;
+	frame->owner = thread_current ();
 	page->frame = frame;
 
 	if((!pml4_set_page (thread_current()->pml4, page->va, frame->kva, page->writable)) || (!swap_in(page,frame->kva))){
