@@ -110,6 +110,17 @@ anon_swap_in (struct page *page, void *kva) {
 // TODO: [6]
 static bool
 anon_swap_out (struct page *page) {
+	if (page == NULL || page->frame == NULL || page->frame->kva == NULL){
+		return false;
+	}
+
+	lock_acquire(&swap_lock);
+
+	if(swap_bitmap == NULL || swap_disk == NULL || page->anon.swap_status == true){
+		lock_release(&swap_lock);
+		return false;
+	}
+
 	struct anon_page *anon_page = &page->anon;
 	size_t sector_per_page = (PGSIZE / DISK_SECTOR_SIZE); // 하나의 페이지가 가지는 섹터의 수
 
@@ -126,6 +137,8 @@ anon_swap_out (struct page *page) {
 	
 	anon_page->swap_status = true;
 	anon_page->swap_slot = bitmap_idx;
+	
+	lock_release(&swap_lock);
 
 	return true;
 }
