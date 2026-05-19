@@ -7,9 +7,9 @@
 #include "lib/string.h"
 
 /* DO NOT MODIFY BELOW LINE */
-static struct disk *swap_disk;
-static struct bitmap* swap_bitmap;
-static struct lock swap_lock;
+struct disk *swap_disk;
+struct bitmap* swap_bitmap;
+struct lock swap_lock;
 static bool anon_swap_in (struct page *page, void *kva);
 static bool anon_swap_out (struct page *page);
 static void anon_destroy (struct page *page);
