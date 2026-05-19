@@ -14,9 +14,6 @@
 
 #define ONE_MB (1 << 20) // 1MB
 
-static struct list frame_table;
-static struct lock frame_table_lock;
-
 /* Initializes the virtual memory subsystem by invoking each subsystem's
  * intialize codes. */
 void
@@ -162,21 +159,37 @@ spt_remove_page (struct supplemental_page_table *spt, struct page *page) {
 }
 
 /* Get the struct frame, that will be evicted. */
+// TODO: [2] 다음 -> 함수 구현x 함수 위치 선정 O
 static struct frame *
 vm_get_victim (void) {
 	struct frame *victim = NULL;
-	 /* TODO: The policy for eviction is up to you. */
+	/* TODO: The policy for eviction is up to you. */
+	
+	lock_acquire(&frame_table_lock);
+	// list_front를 했는데, frame_table에 아무것도 없으면 os가 다운됨. 
+	// => frambe_table이 비어있는지 먼저 확인
+	RETURN_VALUE_IF(list_empty(&frame_table) == true, NULL);
+
+	struct list_elem *frame_front = list_front(&frame_table); // frame_table에서 첫번째 불러오기
+	victim = list_entry(frame_front, struct frame, elem);  // frame 형태로 변환
+	lock_release(&frame_table_lock);
 
 	return victim;
 }
 
 /* Evict one page and return the corresponding frame.
  * Return NULL on error.*/
+// TODO: [1] 이거부터 해
 static struct frame *
 vm_evict_frame (void) {
 	struct frame *victim UNUSED = vm_get_victim ();
 	/* TODO: swap out the victim and return the evicted frame. */
+	// 프레임를 하나 가져온다
+	struct frame* frame = vm_get_frame();
 
+	// 디스크에 수납하고 프레임을 비운다(맵핑된 물리 메모리만 남긴다)
+
+	// 그거 준다
 	return NULL;
 }
 

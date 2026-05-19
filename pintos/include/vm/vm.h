@@ -4,6 +4,9 @@
 #include "threads/palloc.h"
 #include "hash.h"
 
+static struct list frame_table;
+static struct lock frame_table_lock;
+
 enum vm_type {
 	/* page not initialized */
 	VM_UNINIT = 0,
