@@ -375,9 +375,9 @@ supplemental_page_table_copy (struct supplemental_page_table *dst, struct supple
 				if (aux == NULL){
 					return false;
 				}
-				if(!vm_alloc_page_with_initializer (type, page->va, page->writable,
+				if(!vm_alloc_page_with_initializer (page_get_type(page), page->va, page->writable,
 											page->uninit.init, aux)){
-												return true;
+												return false;
 											}
 				break;
 			case VM_ANON:
