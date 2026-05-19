@@ -9,6 +9,8 @@
 #include "threads/synch.h"
 #include "threads/mmu.h"
 #include "threads/init.h"
+#include "string.h"
+#include "userprog/process.h"
 
 #define ONE_MB (1 << 20) // 1MB
 
@@ -41,7 +43,9 @@ page_get_type (struct page *page) {
 	int ty = VM_TYPE (page->operations->type);
 	switch (ty) {
 		case VM_UNINIT:
-			return VM_TYPE (page->uninit.type);
+			return VM_TYPE (page->operations->type);
+		case VM_ANON:
+			return VM_TYPE (page->operations->type);
 		default:
 			return ty;
 	}
@@ -351,8 +355,46 @@ supplemental_page_table_init (struct supplemental_page_table *spt) {
 
 /* Copy supplemental page table from src to dst */
 bool
-supplemental_page_table_copy (struct supplemental_page_table *dst UNUSED,
-		struct supplemental_page_table *src UNUSED) {
+supplemental_page_table_copy (struct supplemental_page_table *dst,
+		struct supplemental_page_table *src) {
+	// 부모의 spt를 알아야 함 = src, 자식dst 은 부모의 spt를 카피해야 함
+
+	RETURN_VALUE_IF(src == NULL || dst == NULL, false);
+	
+	struct hash_iterator i;
+	struct segment_load_aux* aux_cpy;
+
+	hash_first(&i, &src->hash_table);
+	
+	while (hash_next(&i))
+	{
+		struct page *page = hash_entry(hash_cur(&i), struct page, hash_elem);
+		
+		RETURN_VALUE_IF(page == NULL, false);
+
+		// 아직 초기화가 안된 페이지라면?
+		if (page_get_type(page) == VM_UNINIT){
+			aux_cpy = malloc(sizeof *aux_cpy);
+
+			// 같은 걸 가리켜도 되는게 있고
+			// 주소라서 같은걸 가리키면 안 되는 것들이 있음.
+			memcpy(aux_cpy, page->uninit.aux, sizeof *aux_cpy); // 복사!
+			aux_cpy->file = file_reopen(aux_cpy->file);
+
+			GOTO_IF(aux_cpy->file == NULL, err);
+			GOTO_IF(vm_alloc_page_with_initializer(page->uninit.type, page->va, page->writable, page->uninit.init, aux_cpy), err);
+		}
+		// 초기화가 된 페이지라면?
+		else {
+
+		}
+	}
+
+err:
+	file_close(aux_cpy->file);
+	free(aux_cpy);
+	return false;	
+
 }
 
 /* Free the resource hold by the supplemental page table */

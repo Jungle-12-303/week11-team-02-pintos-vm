@@ -61,7 +61,7 @@ struct page {
 		struct page_cache page_cache;
 #endif
 	};
-};
+}; 
 
 /* The representation of "frame" */
 struct frame {
