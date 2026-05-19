@@ -173,8 +173,36 @@ vm_get_victim (void) {
 		return NULL;
 	}
 
-	struct list_elem *frame_front = list_front(&frame_table); // frame_table에서 첫번째 불러오기
-	victim = list_entry(frame_front, struct frame, elem);  // frame 형태로 변환
+	// 맨 앞에꺼 꺼내고, 뒤에 넣기
+	//
+	struct frame *temp_frame = NULL;
+	int i = list_size(&frame_table) * 2;
+	while(i>0){ // 최대 프레임 테이블의 수만큼 반복
+		i--;
+		
+		struct list_elem *frame_front = list_pop_front(&frame_table);
+		list_push_back(&frame_table, victim);
+		
+		temp_frame = list_entry(frame_front, struct frame, elem);
+		if((temp_frame->owner == NULL) || (temp_frame->owner->pml4 == NULL) ||
+			 (temp_frame->page == NULL)){
+			
+			continue;
+		}
+
+		if(pml4_is_accessed(temp_frame->owner->pml4, temp_frame->page->va)){
+			pml4_set_accessed(temp_frame->owner->pml4, temp_frame->page->va, 0);
+
+			continue;
+		}
+
+		victim = temp_frame;
+		break;
+
+	}
+	
+
+	  // frame 형태로 변환
 	lock_release(&frame_table_lock);
 
 	return victim;
@@ -186,14 +214,30 @@ vm_get_victim (void) {
 static struct frame *
 vm_evict_frame (void) {
 	struct frame *victim = vm_get_victim ();
+
+	if(victim == NULL || victim->page == NULL){
+		return NULL;
+	}
+
 	/* TODO: swap out the victim and return the evicted frame. */
-	// 프레임를 하나 가져온다
-	struct frame* frame = vm_get_frame();
+	if(!swap_out(victim->page)){
+		return NULL;
+	};
 
 	// 디스크에 수납하고 프레임을 비운다(맵핑된 물리 메모리만 남긴다)
+	if((victim->owner->pml4 == NULL) || (victim->page->va == NULL) ||
+			(victim->page->frame == NULL)){
+			
+		return NULL;
+	}
 
-	// 그거 준다
-	return NULL;
+	pml4_clear_page(victim->owner->pml4, victim->page->va);
+	victim->page->frame = NULL;
+	victim->owner = NULL;
+	victim->page = NULL;
+
+	// 그거 준다!
+	return victim;
 }
 
 /* palloc() and get frame. If there is no available page, evict the page
