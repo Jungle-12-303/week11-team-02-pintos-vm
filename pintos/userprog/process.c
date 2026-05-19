@@ -1344,7 +1344,11 @@ struct segment_load_aux * copy_segment_load_aux (const struct segment_load_aux *
 		return NULL;
 	}
 
-	aux->file = file_reopen(src->file);
+	struct file *f = file_reopen(src->file);
+	if (f == NULL){
+		return NULL;
+	}
+	aux->file = f;
 	aux->ofs = src->ofs;
 	aux->read_bytes = src->read_bytes;
 	aux->zero_bytes = src->zero_bytes;
