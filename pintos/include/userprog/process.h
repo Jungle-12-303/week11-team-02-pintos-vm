@@ -15,4 +15,5 @@ int process_add_file (struct file *f);
 struct file *process_get_file (int fd);
 void process_close_file (int fd);
 
+struct segment_load_aux * copy_segment_load_aux (const struct segment_load_aux *src);
 #endif /* userprog/process.h */

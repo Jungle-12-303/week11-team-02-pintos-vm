@@ -9,6 +9,7 @@
 #include "threads/synch.h"
 #include "threads/mmu.h"
 #include "threads/init.h"
+#include "string.h"
 
 #define ONE_MB (1 << 20) // 1MB
 
@@ -351,28 +352,50 @@ supplemental_page_table_init (struct supplemental_page_table *spt) {
 
 /* Copy supplemental page table from src to dst */
 bool
-supplemental_page_table_copy (struct supplemental_page_table *dst,
-		struct supplemental_page_table *src) {
-			if(src == NULL || &src->hash_table == NULL){
-				return false;
-			}
-			
-			supplemental_page_table_init(dst);
-			dst->hash_table.elem_cnt = src->hash_table.elem_cnt;
-			dst->hash_table.bucket_cnt = src->hash_table.bucket_cnt;
-			dst->hash_table.aux = src->hash_table.aux;
+supplemental_page_table_copy (struct supplemental_page_table *dst, struct supplemental_page_table *src) {
+	if(dst == NULL || src == NULL || &src->hash_table == NULL){
+		return false;
+	}
 
-			for (int i = 0; i < src->hash_table.bucket_cnt; i++){
-				struct list_elem *curr = &src->hash_table.buckets[i].head;
-				struct list_elem *copy = &dst->hash_table.buckets[i].head;
+	supplemental_page_table_init(dst);
 
-				while(curr != NULL){
-					copy = curr;
+	struct hash_iterator i;
+	hash_first (&i, &src->hash_table);
 
-					curr = curr->next;
-					copy = copy->next;
+	while (hash_next (&i)){
+		struct page *page = hash_entry (hash_cur (&i), struct page, hash_elem);
+
+		enum vm_type type = page_get_type(page);
+
+		switch (VM_TYPE(type)){
+			case VM_UNINIT:
+			// 메타 데이터만
+				struct segment_load_aux * aux = segment_load_aux(page->uninit.aux);
+				if (aux == NULL){
+					return false;
 				}
-			}
+				vm_alloc_page_with_initializer (type, page->va, page->writable,
+											page->uninit.init, aux);
+				break;
+			case VM_ANON:
+				if(!vm_alloc_page(type, page->va, page->writable)){
+					return false;
+				}
+				if(!vm_claim_page(page->va)){
+					return false;
+				}
+				struct page *new_page = spt_find_page(dst, page->va);
+				if (new_page->frame != NULL){
+					memcpy(new_page->frame->kva, page->frame->kva, PGSIZE);
+				}
+				
+				break;
+
+			case VM_FILE:
+
+		}
+		spt_insert_page(dst,page);
+	}
 }
 
 /* Free the resource hold by the supplemental page table */

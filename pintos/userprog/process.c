@@ -1340,4 +1340,22 @@ setup_stack (struct intr_frame *if_) {
 	}
 	return success;
 }
+
+struct segment_load_aux * copy_segment_load_aux (const struct segment_load_aux *src){
+	if (src == NULL){
+		return NULL;
+	}
+	struct segment_load_aux *aux = malloc(sizedof(*aux));
+
+	if(aux == NULL){
+		return NULL;
+	}
+
+	aux->file = file_reopen(src->file);
+	aux->ofs = src->ofs;
+	aux->read_bytes = src->read_bytes;
+	aux->zero_bytes = src->zero_bytes;
+
+	return aux;
+}
 #endif /* VM */
