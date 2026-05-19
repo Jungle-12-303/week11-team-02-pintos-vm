@@ -134,7 +134,7 @@ anon_swap_out (struct page *page) {
 	for(int i = 0; i < sector_per_page; i++){
 		
 		// 메모리의 내용을 디스크에 넣어줌
-		disk_write(swap_disk, bitmap_idx * sector_per_page + i, page->frame->kva + DISK_SECTOR_SIZE * i);
+		disk_write(swap_disk, bitmap_idx * sector_per_page + i, (char*)page->frame->kva + DISK_SECTOR_SIZE * i);
 		
 	}
 	bitmap_set(swap_bitmap, bitmap_idx, 1);
@@ -151,5 +151,27 @@ anon_swap_out (struct page *page) {
 // TODO: [7]
 static void
 anon_destroy (struct page *page) {
+
+	if (page == NULL){
+		return;
+	}
+	// 2가지 상황
+	lock_acquire(&swap_lock);
+
 	struct anon_page *anon_page = &page->anon;
+	if(anon_page->swap_status){
+
+		if(swap_bitmap == NULL || anon_page->swap_slot == -1){
+			lock_release(&swap_lock);
+			return;
+		}
+
+		bitmap_set(swap_bitmap, anon_page->swap_slot, 0);
+		
+		anon_page->swap_status = false;
+		anon_page->swap_slot = -1;
+	}
+
+	lock_release(&swap_lock);
+
 }
