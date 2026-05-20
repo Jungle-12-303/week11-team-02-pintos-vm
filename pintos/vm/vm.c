@@ -518,6 +518,5 @@ void page_destroy (struct hash_elem *e, void *aux)
 {
 
 	struct page* page = hash_entry(e ,struct page, hash_elem);
-	
-	destroy(page);
+	vm_dealloc_page(page);
 }
