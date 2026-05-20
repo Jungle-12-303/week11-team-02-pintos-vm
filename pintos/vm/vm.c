@@ -371,7 +371,7 @@ supplemental_page_table_copy (struct supplemental_page_table *dst UNUSED,
 		switch(VM_TYPE(page->operations->type))
 		{
 			case VM_UNINIT:
-
+			{
 				//temp_aux 메모리 할당
 				struct segment_load_aux *parent_aux = page->uninit.aux;
 				struct segment_load_aux *temp_aux = malloc(sizeof(*temp_aux));
@@ -400,7 +400,9 @@ supplemental_page_table_copy (struct supplemental_page_table *dst UNUSED,
 				//UNINIT page여서 매핑은 안한다
 				
 				break;
+			}
 			case VM_ANON:
+			{
 				if(!vm_alloc_page(VM_ANON, page->va, page->writable))
 				{
 					return false;
@@ -430,8 +432,9 @@ supplemental_page_table_copy (struct supplemental_page_table *dst UNUSED,
 				// 부모 frame 내용 -> 자식 frame 내용 복사
 				memcpy(child_page->frame->kva, page->frame->kva, PGSIZE);
 				break;
-
+			}
 			case VM_FILE:
+			{
 				// struct file_page *file_page = &page->file;
 
 				// struct file_info* child_aux = malloc(sizeof *child_aux);
@@ -440,6 +443,10 @@ supplemental_page_table_copy (struct supplemental_page_table *dst UNUSED,
 
 				struct page* child_page = spt_find_page(dst, page->va);
 
+				if(child_page == NULL)
+				{
+					return false;
+				}
 				// 부모 스레드 페이지의 파일 정보를 자식 스레드 페이지에 저장
 				child_page->file.ofs = page->file.ofs;
 				child_page->file.read_bytes = page->file.read_bytes;
@@ -458,15 +465,10 @@ supplemental_page_table_copy (struct supplemental_page_table *dst UNUSED,
 					return false;
 				}
 				
-				// 자식 페이지 찾는다
-				struct page* child_page = spt_find_page(dst, page->va);
-				if(child_page == NULL)
-				{
-					return false;
-				}
 
 				memcpy(child_page->frame->kva, page->frame->kva, PGSIZE);
 				break;
+			}
 		}
 
 		
@@ -475,11 +477,17 @@ supplemental_page_table_copy (struct supplemental_page_table *dst UNUSED,
 
 }
 
+
+
+
 /* Free the resource hold by the supplemental page table */
 void
 supplemental_page_table_kill (struct supplemental_page_table *spt UNUSED) {
 	/* TODO: Destroy all the supplemental_page_table hold by thread and
 	 * TODO: writeback all the modified contents to the storage. */
+
+	//  hash table 안의 모든 원소 돌면서 콜백함수를 호출한다
+	hash_destroy(&spt->hash_table, page_destroy);
 }
 
 
@@ -504,4 +512,12 @@ bool hash_less(const struct hash_elem *a, const struct hash_elem *b, void *aux){
 	struct page* page_b = hash_entry(b, struct page, hash_elem);
 
 	return page_a->va < page_b->va;
+}
+
+void page_destroy (struct hash_elem *e, void *aux)
+{
+
+	struct page* page = hash_entry(e ,struct page, hash_elem);
+	
+	destroy(page);
 }
