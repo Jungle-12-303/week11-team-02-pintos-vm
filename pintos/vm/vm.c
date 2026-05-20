@@ -441,3 +441,10 @@ bool hash_less(const struct hash_elem *a, const struct hash_elem *b, void *aux){
 
 	return page_a->va < page_b->va;
 }
+
+void
+vm_remove_frame(struct frame *frame){
+	lock_acquire (&frame_table_lock);
+	list_remove(&frame->elem);
+	lock_release (&frame_table_lock);
+}
