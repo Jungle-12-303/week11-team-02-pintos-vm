@@ -10,6 +10,7 @@
 #include "threads/mmu.h"
 #include "threads/init.h"
 #include <string.h>
+#include "vm/file.h"
 #define ONE_MB (1 << 20) // 1MB
 
 static struct list frame_table;
@@ -370,27 +371,44 @@ supplemental_page_table_copy (struct supplemental_page_table *dst UNUSED,
 		{
 			case VM_UNINIT:
 
+				//temp_aux 메모리 할당
+				struct file_page *parent_aux = page->uninit.aux;
+				struct file_page *temp_aux = malloc(sizeof(*temp_aux));
+
 				//temp_aux에 원본 aux 복사
-				void* temp_aux = malloc(sizeof(page->uninit.aux));
-		
-				memcpy(temp_aux, page->uninit.aux, sizeof(page->uninit.aux));
+				memcpy(temp_aux, parent_aux, sizeof(*temp_aux));
+
+				// 같은 파일을 가리키는 자식전용 file 핸들을 새로 여는 것
+				// 현재 스레드가 자식 스레드여서 사용 가능
+				// 부모 스레드와는 다른 파일 객체 사용
+				temp_aux->file = file_reopen(parent_aux->file);
 
 				// 현재 스레드가 자식 스레드여서 사용 가능
-				vm_alloc_page_with_initializer(page->uninit.type, page->va, page->writable, page->uninit.init, temp_aux);
+				if(!vm_alloc_page_with_initializer(page->uninit.type, page->va, page->writable, page->uninit.init, temp_aux))
+				{
+					return false;
+				}
 				
 				//UNINIT page여서 매핑은 안한다
 				
 				break;
 			case VM_ANON:
-
-				// 현재 스레드가 자식 스레드여서 사용 가능
-				vm_alloc_page(VM_ANON, page->va, page->writable);
-
-				if(page->frame)
+				if(!vm_alloc_page(VM_ANON, page->va, page->writable))
 				{
-					//자식 스레드의 spt에 va를 가진 페이지가 있으면 물리 메모리에 매핑
-					vm_claim_page(page->va);
+					return false;
 				}
+				
+				if(page->frame == NULL)
+				{
+					return false;
+				}
+				
+				//자식 스레드의 spt에 va를 가진 페이지가 있으면 물리 메모리에 매핑
+				if(!vm_claim_page(page->va))
+				{
+					return false;
+				}
+				
 
 				//자식 스레드의 spt에서 page를 찾는다.
 				struct page* child_page= spt_find_page(dst, page->va);
@@ -400,6 +418,7 @@ supplemental_page_table_copy (struct supplemental_page_table *dst UNUSED,
 					return false;
 				}
 
+				// 부모 frame 내용 -> 자식 frame 내용 복사
 				memcpy(child_page->frame->kva, page->frame->kva, PGSIZE);
 				break;
 
@@ -417,8 +436,9 @@ supplemental_page_table_copy (struct supplemental_page_table *dst UNUSED,
 		}
 
 		
-
+		
 	}
+
 }
 
 /* Free the resource hold by the supplemental page table */
