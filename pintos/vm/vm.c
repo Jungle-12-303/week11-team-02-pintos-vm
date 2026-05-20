@@ -517,17 +517,8 @@ supplemental_page_table_copy (struct supplemental_page_table *dst,
 /* Free the resource hold by the supplemental page table */
 void
 supplemental_page_table_kill (struct supplemental_page_table *spt UNUSED) {
-	/* TODO: Destroy all the supplemental_page_table hold by thread and
-	 * TODO: writeback all the modified contents to the storage. */
-
-
-	// Frees all the resources that were held by a supplemental page table
-	 // 스레드가 가지고 있는 spt가 가지고 있는 페이지가 가지고 있는 자원을 모두 해제
-
-	 // You do not need to worry about the actual page table (pml4) and the physical memory (palloc-ed memory) in this function
-	 // pml4에서 삭제할 거를 미리 삭제하면 에러가 난다... 
-
-	 // You need to iterate through the page entries and call destroy(page) for the pages in the table.
+	/* Destroy all the supplemental_page_table hold by thread and
+	 * writeback all the modified contents to the storage. */
 
 	RETURN_IF(spt == NULL);
 
