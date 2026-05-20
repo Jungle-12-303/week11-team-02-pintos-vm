@@ -473,12 +473,17 @@ supplemental_page_table_copy (struct supplemental_page_table *dst,
 				return false;
 			}
 			
-			if(temp_page->frame == NULL || temp_page->frame->kva == NULL ||page->frame == NULL || page->frame->kva == NULL){
+			if(temp_page->frame == NULL || temp_page->frame->kva == NULL){
 				spt_remove_page(dst, temp_page);
 				return false;
 			}
 
 			if(page->anon.swap_status == 0){ // 부모 페이지가 스왑되지 않아서 바로 카피할 수 있는 상태라면
+				
+				if(page->frame == NULL || page->frame->kva == NULL) {
+					spt_remove_page(dst, temp_page);
+					return false;
+				}
 
 				memcpy(temp_page->frame->kva, page->frame->kva, PGSIZE);
 
