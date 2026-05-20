@@ -11,6 +11,7 @@
 #include "threads/init.h"
 #include <string.h>
 #include "vm/file.h"
+#include "userprog/process.h"
 #define ONE_MB (1 << 20) // 1MB
 
 static struct list frame_table;
@@ -372,9 +373,12 @@ supplemental_page_table_copy (struct supplemental_page_table *dst UNUSED,
 			case VM_UNINIT:
 
 				//temp_aux 메모리 할당
-				struct file_page *parent_aux = page->uninit.aux;
-				struct file_page *temp_aux = malloc(sizeof(*temp_aux));
-
+				struct segment_load_aux *parent_aux = page->uninit.aux;
+				struct segment_load_aux *temp_aux = malloc(sizeof(*temp_aux));
+				if(temp_aux == NULL)
+				{
+					return false;
+				}
 				//temp_aux에 원본 aux 복사
 				memcpy(temp_aux, parent_aux, sizeof(*temp_aux));
 
@@ -382,7 +386,11 @@ supplemental_page_table_copy (struct supplemental_page_table *dst UNUSED,
 				// 현재 스레드가 자식 스레드여서 사용 가능
 				// 부모 스레드와는 다른 파일 객체 사용
 				temp_aux->file = file_reopen(parent_aux->file);
-
+				if(temp_aux->file == NULL)
+				{
+					free(temp_aux);
+					return false;
+				}
 				// 현재 스레드가 자식 스레드여서 사용 가능
 				if(!vm_alloc_page_with_initializer(page->uninit.type, page->va, page->writable, page->uninit.init, temp_aux))
 				{
@@ -398,20 +406,21 @@ supplemental_page_table_copy (struct supplemental_page_table *dst UNUSED,
 					return false;
 				}
 				
+
+				//부모 스레드 frame 있는지 확인
 				if(page->frame == NULL)
 				{
 					return false;
 				}
 				
-				//자식 스레드의 spt에 va를 가진 페이지가 있으면 물리 메모리에 매핑
+				//자식 스레드의 spt에 child_page를 가진 페이지가 있으면 물리 메모리에 매핑
 				if(!vm_claim_page(page->va))
 				{
 					return false;
 				}
-				
 
-				//자식 스레드의 spt에서 page를 찾는다.
-				struct page* child_page= spt_find_page(dst, page->va);
+				//자식 스레드 spt에서 child_page 찾는다
+				struct page* child_page = spt_find_page(dst, page->va);
 
 				if(child_page == NULL)
 				{
@@ -427,11 +436,36 @@ supplemental_page_table_copy (struct supplemental_page_table *dst UNUSED,
 
 				// struct file_info* child_aux = malloc(sizeof *child_aux);
 
-				// vm_alloc_page(VM_FILE, page->va, page->writable);
+				vm_alloc_page(VM_FILE, page->va, page->writable);
 
-				// struct supplemental_page_table* cur = &thread_current()->spt;
+				struct page* child_page = spt_find_page(dst, page->va);
 
+				// 부모 스레드 페이지의 파일 정보를 자식 스레드 페이지에 저장
+				child_page->file.ofs = page->file.ofs;
+				child_page->file.read_bytes = page->file.read_bytes;
+				child_page->file.zero_bytes = page->file.zero_bytes;
+				child_page->file.file = file_reopen(page->file.file);
+
+				// 부모 페이지 frame 있나 확인
+				if(page->frame == NULL)
+				{
+					return false;
+				}
+
+				// 자식 페이지 페이지 테이블에 매핑
+				if(!vm_claim_page(page->va))
+				{
+					return false;
+				}
 				
+				// 자식 페이지 찾는다
+				struct page* child_page = spt_find_page(dst, page->va);
+				if(child_page == NULL)
+				{
+					return false;
+				}
+
+				memcpy(child_page->frame->kva, page->frame->kva, PGSIZE);
 				break;
 		}
 
