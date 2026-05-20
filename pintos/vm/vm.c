@@ -9,6 +9,8 @@
 #include "threads/synch.h"
 #include "threads/mmu.h"
 #include "threads/init.h"
+#include "string.h"
+#include "userprog/process.h"
 
 #define ONE_MB (1 << 20) // 1MB
 
@@ -351,15 +353,69 @@ supplemental_page_table_init (struct supplemental_page_table *spt) {
 
 /* Copy supplemental page table from src to dst */
 bool
-supplemental_page_table_copy (struct supplemental_page_table *dst UNUSED,
-		struct supplemental_page_table *src UNUSED) {
+supplemental_page_table_copy (struct supplemental_page_table *dst, struct supplemental_page_table *src) {
+	if(dst == NULL || src == NULL || &src->hash_table == NULL){
+		return false;
+	}
+
+	supplemental_page_table_init(dst);
+
+	struct hash_iterator i;
+	hash_first (&i, &src->hash_table);
+
+	while (hash_next (&i)){
+		struct page *page = hash_entry (hash_cur (&i), struct page, hash_elem);
+
+		enum vm_type type = page->operations->type;
+
+		switch (VM_TYPE(type)){
+			case VM_UNINIT:
+			// 메타 데이터만
+				struct segment_load_aux * aux = copy_segment_load_aux(page->uninit.aux);
+				if (aux == NULL){
+					return false;
+				}
+				if(!vm_alloc_page_with_initializer (page_get_type(page), page->va, page->writable,
+											page->uninit.init, aux)){
+												return false;
+											}
+				break;
+			case VM_ANON:
+				if(!vm_alloc_page(type, page->va, page->writable)){
+					return false;
+				}
+				if(!vm_claim_page(page->va)){
+					return false;
+				}
+				struct page *new_page = spt_find_page(dst, page->va);
+				if (page->frame != NULL && new_page->frame != NULL){
+					memcpy(new_page->frame->kva, page->frame->kva, PGSIZE);
+				}
+				break;
+			case VM_FILE:
+				return false;
+		}
+	}
+	return true;
+}
+
+static void
+spt_destructor (struct hash_elem *e, void *aux UNUSED){
+	struct page *page = hash_entry (e, struct page, hash_elem);
+	vm_dealloc_page (page);
 }
 
 /* Free the resource hold by the supplemental page table */
 void
-supplemental_page_table_kill (struct supplemental_page_table *spt UNUSED) {
+supplemental_page_table_kill (struct supplemental_page_table *spt) {
 	/* TODO: Destroy all the supplemental_page_table hold by thread and
 	 * TODO: writeback all the modified contents to the storage. */
+
+	if (spt == NULL){
+		return;
+	}
+
+	hash_destroy(&spt->hash_table, spt_destructor);
 }
 
 
@@ -384,4 +440,11 @@ bool hash_less(const struct hash_elem *a, const struct hash_elem *b, void *aux){
 	struct page* page_b = hash_entry(b, struct page, hash_elem);
 
 	return page_a->va < page_b->va;
+}
+
+void
+vm_remove_frame(struct frame *frame){
+	lock_acquire (&frame_table_lock);
+	list_remove(&frame->elem);
+	lock_release (&frame_table_lock);
 }
