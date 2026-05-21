@@ -4,6 +4,9 @@
 #include "threads/palloc.h"
 #include "hash.h"
 
+static struct list frame_table;
+static struct lock frame_table_lock;
+
 enum vm_type {
 	/* page not initialized */
 	VM_UNINIT = 0,
@@ -61,13 +64,14 @@ struct page {
 		struct page_cache page_cache;
 #endif
 	};
-};
+}; 
 
 /* The representation of "frame" */
 struct frame {
 	void *kva;
 	struct page *page;
 	struct list_elem elem;
+	struct thread* owner;
 };
 
 /* The function table for page operations.
@@ -78,6 +82,7 @@ struct page_operations {
 	bool (*swap_in) (struct page *, void *);
 	bool (*swap_out) (struct page *);
 	void (*destroy) (struct page *);
+	bool (*copy) (struct page *);
 	enum vm_type type;
 };
 
@@ -85,6 +90,8 @@ struct page_operations {
 #define swap_out(page) (page)->operations->swap_out (page)
 #define destroy(page) \
 	if ((page)->operations->destroy) (page)->operations->destroy (page)
+#define copy(page) \
+	(((page)->operations->copy) ? (page)->operations->copy (page) : false)
 
 /* Representation of current process's memory space.
  * We don't want to force you to obey any specific design for this struct.
@@ -98,6 +105,7 @@ void supplemental_page_table_init (struct supplemental_page_table *spt);
 bool supplemental_page_table_copy (struct supplemental_page_table *dst,
 		struct supplemental_page_table *src);
 void supplemental_page_table_kill (struct supplemental_page_table *spt);
+void spt_destroy_page (struct hash_elem *e, void *aux);
 struct page *spt_find_page (struct supplemental_page_table *spt,
 		void *va);
 bool spt_insert_page (struct supplemental_page_table *spt, struct page *page);

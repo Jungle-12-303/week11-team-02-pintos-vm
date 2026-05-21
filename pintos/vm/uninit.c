@@ -10,15 +10,18 @@
 
 #include "vm/vm.h"
 #include "vm/uninit.h"
+#include "userprog/process.h"
 
 static bool uninit_initialize (struct page *page, void *kva);
 static void uninit_destroy (struct page *page);
+static bool uninit_copy (struct page *page);
 
 /* DO NOT MODIFY this struct */
 static const struct page_operations uninit_ops = {
 	.swap_in = uninit_initialize,
 	.swap_out = NULL,
 	.destroy = uninit_destroy,
+	.copy = uninit_copy,
 	.type = VM_UNINIT,
 };
 
@@ -65,4 +68,40 @@ uninit_destroy (struct page *page) {
 	struct uninit_page *uninit UNUSED = &page->uninit;
 	/* TODO: Fill this function.
 	 * TODO: If you don't have anything to do, just return. */
+
+	
+	free(uninit->aux);
+	return ;
+}
+
+static bool
+uninit_copy (struct page *page) {
+	struct uninit_page *uninit UNUSED = &page->uninit;
+	struct segment_load_aux* aux_cpy;
+
+	// 메타데이터 독립 할당
+	aux_cpy = malloc(sizeof *aux_cpy); 
+	if(aux_cpy == NULL){
+		return false;
+	}
+	
+	memcpy(aux_cpy, page->uninit.aux, sizeof *aux_cpy); // 복사!
+
+	// 파일 지시자 격리
+	aux_cpy->file = file_reopen(aux_cpy->file);
+
+	if (aux_cpy->file == NULL) {
+		free(aux_cpy);
+		return false;
+	}
+
+	// 지연 로딩 예약 등록
+	if(!vm_alloc_page_with_initializer(page->uninit.type, page->va, 
+										page->writable, page->uninit.init, aux_cpy)){
+		file_close(aux_cpy->file);
+		free(aux_cpy);
+		return false;
+	}
+
+	return true;
 }

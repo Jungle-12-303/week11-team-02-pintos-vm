@@ -9,11 +9,10 @@
 #include "threads/synch.h"
 #include "threads/mmu.h"
 #include "threads/init.h"
+#include "string.h"
+#include "userprog/process.h"
 
 #define ONE_MB (1 << 20) // 1MB
-
-static struct list frame_table;
-static struct lock frame_table_lock;
 
 /* Initializes the virtual memory subsystem by invoking each subsystem's
  * intialize codes. */
@@ -41,7 +40,9 @@ page_get_type (struct page *page) {
 	int ty = VM_TYPE (page->operations->type);
 	switch (ty) {
 		case VM_UNINIT:
-			return VM_TYPE (page->uninit.type);
+			return VM_TYPE (page->operations->type);
+		case VM_ANON:
+			return VM_TYPE (page->operations->type);
 		default:
 			return ty;
 	}
@@ -161,7 +162,47 @@ spt_remove_page (struct supplemental_page_table *spt, struct page *page) {
 static struct frame *
 vm_get_victim (void) {
 	struct frame *victim = NULL;
-	 /* TODO: The policy for eviction is up to you. */
+	/* The policy for eviction is up to you. */
+	
+	lock_acquire(&frame_table_lock);
+	// list_front를 했는데, frame_table에 아무것도 없으면 os가 다운됨. 
+	// => frambe_table이 비어있는지 먼저 확인
+	if(list_empty(&frame_table) == true){
+		lock_release(&frame_table_lock);
+		return NULL;
+	}
+
+	// 맨 앞에꺼 꺼내고, 뒤에 넣기
+	//
+	struct frame *temp_frame = NULL;
+	int i = list_size(&frame_table) * 2;
+	while(i>0){ // 최대 프레임 테이블의 수만큼 반복
+		i--;
+		
+		struct list_elem *frame_front = list_pop_front(&frame_table);
+		list_push_back(&frame_table, frame_front);
+		
+		temp_frame = list_entry(frame_front, struct frame, elem);
+		if((temp_frame->owner == NULL) || (temp_frame->owner->pml4 == NULL) ||
+			 (temp_frame->page == NULL)){
+			
+			continue;
+		}
+
+		if(pml4_is_accessed(temp_frame->owner->pml4, temp_frame->page->va)){
+			pml4_set_accessed(temp_frame->owner->pml4, temp_frame->page->va, 0);
+
+			continue;
+		}
+
+		victim = temp_frame;
+		break;
+
+	}
+	
+
+	  // frame 형태로 변환
+	lock_release(&frame_table_lock);
 
 	return victim;
 }
@@ -170,10 +211,31 @@ vm_get_victim (void) {
  * Return NULL on error.*/
 static struct frame *
 vm_evict_frame (void) {
-	struct frame *victim UNUSED = vm_get_victim ();
-	/* TODO: swap out the victim and return the evicted frame. */
+	struct frame *victim = vm_get_victim ();
 
-	return NULL;
+	if(victim == NULL || victim->page == NULL){
+		return NULL;
+	}
+
+	/* swap out the victim and return the evicted frame. */
+	if(!swap_out(victim->page)){
+		return NULL;
+	};
+
+	// 디스크에 수납하고 프레임을 비운다(맵핑된 물리 메모리만 남긴다)
+	if((victim->owner == NULL) ||(victim->owner->pml4 == NULL) || (victim->page->va == NULL) ||
+			(victim->page->frame == NULL)){
+			
+		return NULL;
+	}
+
+	pml4_clear_page(victim->owner->pml4, victim->page->va);
+	victim->page->frame = NULL;
+	victim->owner = NULL;
+	victim->page = NULL;
+
+	// 그거 준다!
+	return victim;
 }
 
 /* palloc() and get frame. If there is no available page, evict the page
@@ -200,6 +262,7 @@ vm_get_frame (void) {
 	else {
 		//palloc success, initialize the frame struct.
 		frame->page = NULL;
+		frame->owner = NULL;
 		lock_acquire (&frame_table_lock);
 		list_push_back (&frame_table, &frame->elem);
 		lock_release (&frame_table_lock);
@@ -304,7 +367,7 @@ vm_dealloc_page (struct page *page) {
 bool
 vm_claim_page (void *va) {
 	struct page *page = NULL;
-	/* TODO: Fill this function */
+	/* Fill this function */
 	struct thread* cur_thread = thread_current();
 	page = spt_find_page(&cur_thread->spt, va);
 
@@ -327,19 +390,23 @@ vm_do_claim_page (struct page *page) {
 	}
 	/* Set links */
 	frame->page = page;
+	frame->owner = thread_current ();
 	page->frame = frame;
 
 	if((!pml4_set_page (thread_current()->pml4, page->va, frame->kva, page->writable)) || (!swap_in(page,frame->kva))){
+		pml4_clear_page(thread_current()->pml4, page->va);
+		
 		lock_acquire (&frame_table_lock);
 		list_remove(&frame->elem);
 		lock_release (&frame_table_lock);
 
 		page->frame = NULL;
-		palloc_free_page(frame->kva);
+		if (frame->kva != NULL) {
+			palloc_free_page(frame->kva);
+		}
 		free(frame);
 		return false;
 	}
-
 	return true;
 }
 
@@ -350,17 +417,160 @@ supplemental_page_table_init (struct supplemental_page_table *spt) {
 }
 
 /* Copy supplemental page table from src to dst */
+// 메모리 복사 왜 해야하는지 발표자료에 담기
 bool
-supplemental_page_table_copy (struct supplemental_page_table *dst UNUSED,
-		struct supplemental_page_table *src UNUSED) {
+supplemental_page_table_copy (struct supplemental_page_table *dst,
+		struct supplemental_page_table *src) {
+	// 부모의 spt를 알아야 함 = src, 자식dst 은 부모의 spt를 카피해야 함
+
+	RETURN_VALUE_IF(src == NULL || dst == NULL, false);
+	
+	struct hash_iterator i;
+	// struct segment_load_aux* aux_cpy;
+
+	hash_first(&i, &src->hash_table);
+	
+	while (hash_next(&i))
+	{
+		struct page *page = hash_entry(hash_cur(&i), struct page, hash_elem);
+		
+		RETURN_VALUE_IF(page == NULL, false);
+
+		// 아직 초기화가 안된 페이지라면?
+		// if (page_get_type(page) == VM_UNINIT){
+
+		// 	// 메타데이터 독립 할당
+		// 	aux_cpy = malloc(sizeof *aux_cpy); 
+		// 	if(aux_cpy == NULL){
+		// 		return false;
+		// 	}
+			
+		// 	memcpy(aux_cpy, page->uninit.aux, sizeof *aux_cpy); // 복사!
+
+		// 	// 파일 지시자 격리
+		// 	aux_cpy->file = file_reopen(aux_cpy->file);
+
+		// 	if (aux_cpy->file == NULL) {
+		// 		free(aux_cpy);
+		// 		return false;
+		// 	}
+
+		// 	// 지연 로딩 예약 등록
+		// 	if(!vm_alloc_page_with_initializer(page->uninit.type, page->va, 
+		// 										page->writable, page->uninit.init, aux_cpy)){
+		// 		file_close(aux_cpy->file);
+		// 		free(aux_cpy);
+		// 		return false;
+		// 	}
+		// }
+		
+		// 초기화가 된 페이지라면?
+		// else if (page_get_type(page) == VM_ANON){
+		// 	if (!vm_alloc_page(page_get_type(page),page->va, page->writable)){
+		// 		return false;
+		// 	}
+		// 	struct page *temp_page = spt_find_page(dst, page->va);
+		// 	if (temp_page == NULL) {
+		// 		return false;
+		// 	}
+			
+		// 	if(!vm_do_claim_page(temp_page)){
+		// 		spt_remove_page(dst, temp_page);
+		// 		return false;
+		// 	}
+			
+		// 	if(temp_page->frame == NULL || temp_page->frame->kva == NULL){
+		// 		spt_remove_page(dst, temp_page);
+		// 		return false;
+		// 	}
+
+		// 	if(page->anon.swap_status == 0){ // 부모 페이지가 스왑되지 않아서 바로 카피할 수 있는 상태라면
+				
+		// 		if(page->frame == NULL || page->frame->kva == NULL) {
+		// 			spt_remove_page(dst, temp_page);
+		// 			return false;
+		// 		}
+
+		// 		memcpy(temp_page->frame->kva, page->frame->kva, PGSIZE);
+
+		// 	} else { // 부모 페이지가 스왑된 상태라면
+		// 			if (swap_bitmap == NULL || swap_disk == NULL || page->anon.swap_slot == (size_t) -1) {
+		// 				spt_remove_page(dst, temp_page);
+		// 				return false;
+		// 		}
+
+		// 		size_t sector_per_page = PGSIZE / DISK_SECTOR_SIZE;
+
+		// 		lock_acquire(&swap_lock);
+		// 		for (size_t i = 0; i < sector_per_page; i++) {
+		// 			disk_read(swap_disk,
+		// 					page->anon.swap_slot * sector_per_page + i,
+		// 					(char *)temp_page->frame->kva + DISK_SECTOR_SIZE * i);
+		// 		}
+		// 		lock_release(&swap_lock);
+		// 	}
+				
+		// }
+		// else if(page_get_type(page) == VM_FILE){
+
+		// }
+
+		if(!copy(page)){
+			return false;
+		}
+
+	}
+	return true;
+
 }
 
 /* Free the resource hold by the supplemental page table */
 void
 supplemental_page_table_kill (struct supplemental_page_table *spt UNUSED) {
-	/* TODO: Destroy all the supplemental_page_table hold by thread and
-	 * TODO: writeback all the modified contents to the storage. */
+	/* Destroy all the supplemental_page_table hold by thread and
+	 * writeback all the modified contents to the storage. */
+
+	RETURN_IF(spt == NULL);
+
+	hash_destroy(&spt->hash_table, spt_destroy_page);
+
 }
+
+void spt_destroy_page (struct hash_elem *e, void *aux) {
+	struct supplemental_page_table *spt = &thread_current()->spt;
+	struct page *page = hash_entry(e, struct page, hash_elem);
+	
+	if(page == NULL){
+		return ;
+	}
+	
+	struct frame *frame = page->frame;
+	
+	if(frame != NULL){
+		if (page->frame->owner != NULL && frame->owner->pml4 != NULL) {
+			pml4_clear_page(frame->owner->pml4, page->va);		
+		}
+
+		if(frame->kva != NULL){
+			palloc_free_page(frame->kva);
+		}
+	
+		lock_acquire(&frame_table_lock);
+		list_remove(&frame->elem);
+		lock_release(&frame_table_lock);
+
+		frame->page = NULL;
+		frame->owner = NULL;
+
+		free(frame);
+	}
+
+	page->frame = NULL;
+
+	spt_remove_page(spt, page);
+	
+}
+
 
 
 // SPT를 구현하기 위한 함수이므로 여기에 위치
