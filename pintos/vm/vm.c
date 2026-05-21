@@ -299,7 +299,7 @@ vm_dealloc_page (struct page *page) {
 	destroy (page);
 	free (page);
 }
-
+//
 /* Claim the page that allocate on VA. */
 // 할당할 페이지를 요청합니다 va. 
 // 먼저 페이지를 가져온 다음, 가져온 페이지를 사용하여 vm_do_claim_page 함수를 호출해야 합니다.
