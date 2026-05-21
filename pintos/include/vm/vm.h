@@ -82,6 +82,7 @@ struct page_operations {
 	bool (*swap_in) (struct page *, void *);
 	bool (*swap_out) (struct page *);
 	void (*destroy) (struct page *);
+	bool (*copy) (struct page *);
 	enum vm_type type;
 };
 
@@ -89,6 +90,8 @@ struct page_operations {
 #define swap_out(page) (page)->operations->swap_out (page)
 #define destroy(page) \
 	if ((page)->operations->destroy) (page)->operations->destroy (page)
+#define copy(page) \
+	(((page)->operations->copy) ? (page)->operations->copy (page) : false)
 
 /* Representation of current process's memory space.
  * We don't want to force you to obey any specific design for this struct.

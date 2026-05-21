@@ -367,7 +367,7 @@ vm_dealloc_page (struct page *page) {
 bool
 vm_claim_page (void *va) {
 	struct page *page = NULL;
-	/* TODO: Fill this function */
+	/* Fill this function */
 	struct thread* cur_thread = thread_current();
 	page = spt_find_page(&cur_thread->spt, va);
 
@@ -426,7 +426,7 @@ supplemental_page_table_copy (struct supplemental_page_table *dst,
 	RETURN_VALUE_IF(src == NULL || dst == NULL, false);
 	
 	struct hash_iterator i;
-	struct segment_load_aux* aux_cpy;
+	// struct segment_load_aux* aux_cpy;
 
 	hash_first(&i, &src->hash_table);
 	
@@ -437,78 +437,88 @@ supplemental_page_table_copy (struct supplemental_page_table *dst,
 		RETURN_VALUE_IF(page == NULL, false);
 
 		// 아직 초기화가 안된 페이지라면?
-		if (page_get_type(page) == VM_UNINIT){
-			aux_cpy = malloc(sizeof *aux_cpy);
-			if(aux_cpy == NULL){
-				return false;
-			}
+		// if (page_get_type(page) == VM_UNINIT){
 
-			// 같은 걸 가리켜도 되는게 있고
-			// 주소라서 같은걸 가리키면 안 되는 것들이 있음.
-			memcpy(aux_cpy, page->uninit.aux, sizeof *aux_cpy); // 복사!
-			aux_cpy->file = file_reopen(aux_cpy->file);
-
-			if (aux_cpy->file == NULL) {
-				free(aux_cpy);
-				return false;
-			}
-
-			if(!vm_alloc_page_with_initializer(page->uninit.type, page->va, page->writable, page->uninit.init, aux_cpy)){
-				file_close(aux_cpy->file);
-				free(aux_cpy);
-				return false;
-			}
-
-		}
-		// 초기화가 된 페이지라면?
-		else if (page_get_type(page) == VM_ANON){
-			if (!vm_alloc_page(page_get_type(page),page->va, page->writable)){
-				return false;
-			}
-			struct page *temp_page = spt_find_page(dst, page->va);
-			if (temp_page == NULL) {
-				return false;
-			}
-			if(!vm_do_claim_page(temp_page)){
-				spt_remove_page(dst, temp_page);
-				return false;
-			}
+		// 	// 메타데이터 독립 할당
+		// 	aux_cpy = malloc(sizeof *aux_cpy); 
+		// 	if(aux_cpy == NULL){
+		// 		return false;
+		// 	}
 			
-			if(temp_page->frame == NULL || temp_page->frame->kva == NULL){
-				spt_remove_page(dst, temp_page);
-				return false;
-			}
+		// 	memcpy(aux_cpy, page->uninit.aux, sizeof *aux_cpy); // 복사!
 
-			if(page->anon.swap_status == 0){ // 부모 페이지가 스왑되지 않아서 바로 카피할 수 있는 상태라면
-				
-				if(page->frame == NULL || page->frame->kva == NULL) {
-					spt_remove_page(dst, temp_page);
-					return false;
-				}
+		// 	// 파일 지시자 격리
+		// 	aux_cpy->file = file_reopen(aux_cpy->file);
 
-				memcpy(temp_page->frame->kva, page->frame->kva, PGSIZE);
+		// 	if (aux_cpy->file == NULL) {
+		// 		free(aux_cpy);
+		// 		return false;
+		// 	}
 
-			} else { // 부모 페이지가 스왑된 상태라면
-					if (swap_bitmap == NULL || swap_disk == NULL || page->anon.swap_slot == (size_t) -1) {
-						spt_remove_page(dst, temp_page);
-						return false;
-				}
-
-				size_t sector_per_page = PGSIZE / DISK_SECTOR_SIZE;
-
-				lock_acquire(&swap_lock);
-				for (size_t i = 0; i < sector_per_page; i++) {
-					disk_read(swap_disk,
-							page->anon.swap_slot * sector_per_page + i,
-							(char *)temp_page->frame->kva + DISK_SECTOR_SIZE * i);
-				}
-				lock_release(&swap_lock);
-			}	
-		}
-		else if(page_get_type(page) == VM_FILE){
-
-		}
+		// 	// 지연 로딩 예약 등록
+		// 	if(!vm_alloc_page_with_initializer(page->uninit.type, page->va, 
+		// 										page->writable, page->uninit.init, aux_cpy)){
+		// 		file_close(aux_cpy->file);
+		// 		free(aux_cpy);
+		// 		return false;
+		// 	}
+		// }
 		
+		// 초기화가 된 페이지라면?
+		// else if (page_get_type(page) == VM_ANON){
+		// 	if (!vm_alloc_page(page_get_type(page),page->va, page->writable)){
+		// 		return false;
+		// 	}
+		// 	struct page *temp_page = spt_find_page(dst, page->va);
+		// 	if (temp_page == NULL) {
+		// 		return false;
+		// 	}
+			
+		// 	if(!vm_do_claim_page(temp_page)){
+		// 		spt_remove_page(dst, temp_page);
+		// 		return false;
+		// 	}
+			
+		// 	if(temp_page->frame == NULL || temp_page->frame->kva == NULL){
+		// 		spt_remove_page(dst, temp_page);
+		// 		return false;
+		// 	}
+
+		// 	if(page->anon.swap_status == 0){ // 부모 페이지가 스왑되지 않아서 바로 카피할 수 있는 상태라면
+				
+		// 		if(page->frame == NULL || page->frame->kva == NULL) {
+		// 			spt_remove_page(dst, temp_page);
+		// 			return false;
+		// 		}
+
+		// 		memcpy(temp_page->frame->kva, page->frame->kva, PGSIZE);
+
+		// 	} else { // 부모 페이지가 스왑된 상태라면
+		// 			if (swap_bitmap == NULL || swap_disk == NULL || page->anon.swap_slot == (size_t) -1) {
+		// 				spt_remove_page(dst, temp_page);
+		// 				return false;
+		// 		}
+
+		// 		size_t sector_per_page = PGSIZE / DISK_SECTOR_SIZE;
+
+		// 		lock_acquire(&swap_lock);
+		// 		for (size_t i = 0; i < sector_per_page; i++) {
+		// 			disk_read(swap_disk,
+		// 					page->anon.swap_slot * sector_per_page + i,
+		// 					(char *)temp_page->frame->kva + DISK_SECTOR_SIZE * i);
+		// 		}
+		// 		lock_release(&swap_lock);
+		// 	}
+				
+		// }
+		// else if(page_get_type(page) == VM_FILE){
+
+		// }
+
+		if(!copy(page)){
+			return false;
+		}
+
 	}
 	return true;
 

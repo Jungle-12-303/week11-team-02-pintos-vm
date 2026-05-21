@@ -5,12 +5,15 @@
 static bool file_backed_swap_in (struct page *page, void *kva);
 static bool file_backed_swap_out (struct page *page);
 static void file_backed_destroy (struct page *page);
+static bool file_backed_copy (struct page *page);
+
 
 /* DO NOT MODIFY this struct */
 static const struct page_operations file_ops = {
 	.swap_in = file_backed_swap_in,
 	.swap_out = file_backed_swap_out,
 	.destroy = file_backed_destroy,
+	.copy = file_backed_copy,
 	.type = VM_FILE,
 };
 
@@ -44,6 +47,12 @@ file_backed_swap_out (struct page *page) {
 static void
 file_backed_destroy (struct page *page) {
 	struct file_page *file_page UNUSED = &page->file;
+}
+
+static bool
+file_backed_copy (struct page *page) {
+	struct file_page *file_page UNUSED = &page->file;
+	return false;
 }
 
 /* Do the mmap */

@@ -13,12 +13,14 @@ struct lock swap_lock;
 static bool anon_swap_in (struct page *page, void *kva);
 static bool anon_swap_out (struct page *page);
 static void anon_destroy (struct page *page);
+static bool anon_copy (struct page *page);
 
 /* DO NOT MODIFY this struct */
 static const struct page_operations anon_ops = {
 	.swap_in = anon_swap_in,
 	.swap_out = anon_swap_out,
 	.destroy = anon_destroy,
+	.copy = anon_copy,
 	.type = VM_ANON,
 };
 
@@ -174,4 +176,59 @@ anon_destroy (struct page *page) {
 
 	lock_release(&swap_lock);
 
+}
+
+static bool
+anon_copy (struct page *page) {
+	struct supplemental_page_table *dst = &thread_current()->spt;
+
+	if (!vm_alloc_page(page_get_type(page),page->va, page->writable)){
+		return false;
+	}
+
+	struct page *temp_page = spt_find_page(dst, page->va);
+	
+	
+	if (temp_page == NULL) {
+		return false;
+	}
+	
+	if(!vm_claim_page(temp_page->va)){
+		spt_remove_page(dst, temp_page);
+		return false;
+	}
+	
+	if(temp_page->frame == NULL || temp_page->frame->kva == NULL){
+		spt_remove_page(dst, temp_page);
+		return false;
+	}
+
+	if(page->anon.swap_status == 0){ // 부모 페이지가 스왑되지 않아서 바로 카피할 수 있는 상태라면
+		
+		if(page->frame == NULL || page->frame->kva == NULL) {
+			spt_remove_page(dst, temp_page);
+			return false;
+		}
+
+		memcpy(temp_page->frame->kva, page->frame->kva, PGSIZE);
+		return true;
+
+	} else { // 부모 페이지가 스왑된 상태라면
+			if (swap_bitmap == NULL || swap_disk == NULL || page->anon.swap_slot == (size_t) -1) {
+				spt_remove_page(dst, temp_page);
+				return false;
+		}
+
+		size_t sector_per_page = PGSIZE / DISK_SECTOR_SIZE;
+
+		lock_acquire(&swap_lock);
+		for (size_t i = 0; i < sector_per_page; i++) {
+			disk_read(swap_disk,
+					page->anon.swap_slot * sector_per_page + i,
+					(char *)temp_page->frame->kva + DISK_SECTOR_SIZE * i);
+		}
+		lock_release(&swap_lock);
+		return true;
+	}
+	
 }
