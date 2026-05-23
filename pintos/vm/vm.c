@@ -9,7 +9,9 @@
 #include "threads/synch.h"
 #include "threads/mmu.h"
 #include "threads/init.h"
-
+#include <string.h>
+#include "vm/file.h"
+#include "userprog/process.h"
 #define ONE_MB (1 << 20) // 1MB
 
 static struct list frame_table;
@@ -297,7 +299,7 @@ vm_dealloc_page (struct page *page) {
 	destroy (page);
 	free (page);
 }
-
+//
 /* Claim the page that allocate on VA. */
 // 할당할 페이지를 요청합니다 va. 
 // 먼저 페이지를 가져온 다음, 가져온 페이지를 사용하여 vm_do_claim_page 함수를 호출해야 합니다.
@@ -350,16 +352,142 @@ supplemental_page_table_init (struct supplemental_page_table *spt) {
 }
 
 /* Copy supplemental page table from src to dst */
+// 부모가 가지고 있던 가상 메모리 구조를 자식도 똑같이 가지게 만든다
 bool
 supplemental_page_table_copy (struct supplemental_page_table *dst UNUSED,
 		struct supplemental_page_table *src UNUSED) {
+			//src는 부모 spt, dst는 자식 spt
+	struct hash_iterator i;
+	//i를 src의 hash_table에 대한 걸로 설정
+	hash_first(&i, &src->hash_table);
+	
+	// 비어있지 않은 bucket 찾아서 거기의 hash_elem 주고, 그 bucket의 hash_elem 있으면 계속 넘어간다.
+	while(hash_next(&i))
+	{
+		// found_elem을 통해서 page가 되고 싶음.
+		struct page* page = hash_entry(i.elem, struct page, hash_elem);
+
+		
+		switch(VM_TYPE(page->operations->type))
+		{
+			case VM_UNINIT:
+			{
+				//temp_aux 메모리 할당
+				struct segment_load_aux *parent_aux = page->uninit.aux;
+				struct segment_load_aux *temp_aux = malloc(sizeof(*temp_aux));
+				if(temp_aux == NULL)
+				{
+					return false;
+				}
+				//temp_aux에 원본 aux 복사
+				memcpy(temp_aux, parent_aux, sizeof(*temp_aux));
+
+				// 같은 파일을 가리키는 자식전용 file 핸들을 새로 여는 것
+				// 현재 스레드가 자식 스레드여서 사용 가능
+				// 부모 스레드와는 다른 파일 객체 사용
+				temp_aux->file = file_reopen(parent_aux->file);
+				if(temp_aux->file == NULL)
+				{
+					free(temp_aux);
+					return false;
+				}
+				// 현재 스레드가 자식 스레드여서 사용 가능
+				if(!vm_alloc_page_with_initializer(page->uninit.type, page->va, page->writable, page->uninit.init, temp_aux))
+				{
+					return false;
+				}
+				
+				//UNINIT page여서 매핑은 안한다
+				
+				break;
+			}
+			case VM_ANON:
+			{
+				if(!vm_alloc_page(VM_ANON, page->va, page->writable))
+				{
+					return false;
+				}
+				
+
+				//부모 스레드 frame 있는지 확인
+				if(page->frame == NULL)
+				{
+					return false;
+				}
+				
+				//자식 스레드의 spt에 child_page를 가진 페이지가 있으면 물리 메모리에 매핑
+				if(!vm_claim_page(page->va))
+				{
+					return false;
+				}
+
+				//자식 스레드 spt에서 child_page 찾는다
+				struct page* child_page = spt_find_page(dst, page->va);
+
+				if(child_page == NULL)
+				{
+					return false;
+				}
+
+				// 부모 frame 내용 -> 자식 frame 내용 복사
+				memcpy(child_page->frame->kva, page->frame->kva, PGSIZE);
+				break;
+			}
+			case VM_FILE:
+			{
+				// struct file_page *file_page = &page->file;
+
+				// struct file_info* child_aux = malloc(sizeof *child_aux);
+
+				vm_alloc_page(VM_FILE, page->va, page->writable);
+
+				struct page* child_page = spt_find_page(dst, page->va);
+
+				if(child_page == NULL)
+				{
+					return false;
+				}
+				// 부모 스레드 페이지의 파일 정보를 자식 스레드 페이지에 저장
+				child_page->file.ofs = page->file.ofs;
+				child_page->file.read_bytes = page->file.read_bytes;
+				child_page->file.zero_bytes = page->file.zero_bytes;
+				child_page->file.file = file_reopen(page->file.file);
+
+				// 부모 페이지 frame 있나 확인
+				if(page->frame == NULL)
+				{
+					return false;
+				}
+
+				// 자식 페이지 페이지 테이블에 매핑
+				if(!vm_claim_page(page->va))
+				{
+					return false;
+				}
+				
+
+				memcpy(child_page->frame->kva, page->frame->kva, PGSIZE);
+				break;
+			}
+		}
+
+		
+		
+	}
+	return true;
 }
+
+
+
 
 /* Free the resource hold by the supplemental page table */
 void
 supplemental_page_table_kill (struct supplemental_page_table *spt UNUSED) {
 	/* TODO: Destroy all the supplemental_page_table hold by thread and
 	 * TODO: writeback all the modified contents to the storage. */
+
+	//  hash table 안의 모든 원소 돌면서 콜백함수를 호출한다
+	hash_destroy(&spt->hash_table, page_destroy);
 }
 
 
@@ -384,4 +512,11 @@ bool hash_less(const struct hash_elem *a, const struct hash_elem *b, void *aux){
 	struct page* page_b = hash_entry(b, struct page, hash_elem);
 
 	return page_a->va < page_b->va;
+}
+
+void page_destroy (struct hash_elem *e, void *aux)
+{
+
+	struct page* page = hash_entry(e ,struct page, hash_elem);
+	vm_dealloc_page(page);
 }
